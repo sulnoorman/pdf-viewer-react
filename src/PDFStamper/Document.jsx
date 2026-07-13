@@ -1,0 +1,19 @@
+import { Page } from './Page';
+
+export const Document = ({ pdfDoc, scale, stamps, setStamps, specimenAsset, scrollContainerRef }) => {
+    return (
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto p-4 md:p-8 flex flex-col items-center relative">
+            {pdfDoc && Array.from({ length: pdfDoc.numPages }).map((_, i) => (
+                <Page
+                    key={i}
+                    pdfDoc={pdfDoc}
+                    pageNumber={i + 1}
+                    scale={scale}
+                    stamps={stamps}
+                    setStamps={setStamps}
+                    specimenAsset={specimenAsset}
+                />
+            ))}
+        </div>
+    );
+};
