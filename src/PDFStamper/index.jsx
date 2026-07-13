@@ -11,6 +11,7 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const [activeStampId, setActiveStampId] = useState(null);
 
     useEffect(() => {
         let activeRenderTask = null;
@@ -80,6 +81,11 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
                 width: dimensions.width > 0 ? dimensions.width : 'auto',
                 height: dimensions.height > 0 ? dimensions.height : 'auto' 
             }}
+            onMouseDown={(e) => {
+                if (e.target === canvasRef.current || e.target === containerRef.current) {
+                    setActiveStampId(null);
+                }
+            }}
         >
             <canvas ref={canvasRef} className="block" />
 
@@ -88,7 +94,9 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
                     key={stamp.id}
                     size={{ width: stamp.width, height: stamp.height }}
                     position={{ x: stamp.x, y: stamp.y }}
+                    onDragStart={() => setActiveStampId(stamp.id)}
                     onDragStop={(e, d) => updateStamp(stamp.id, { x: d.x, y: d.y })}
+                    onResizeStart={() => setActiveStampId(stamp.id)}
                     onResizeStop={(e, direction, ref, delta, position) => {
                         updateStamp(stamp.id, {
                             width: ref.offsetWidth,
@@ -98,7 +106,11 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
                     }}
                     bounds="parent"
                     lockAspectRatio={true}
-                    className="border-2 border-blue-500 bg-blue-500/10 cursor-move hover:bg-blue-500/20 transition-colors"
+                    className={`transition-colors cursor-move ${
+                        activeStampId === stamp.id
+                            ? 'border-2 border-blue-500 bg-blue-500/10'
+                            : 'border-2 border-transparent hover:border-gray-400 hover:bg-gray-400/10'
+                    }`}
                 >
                     <img src={specimenAsset} className="w-full h-full object-contain pointer-events-none" alt="specimen" />
                 </Rnd>
@@ -256,9 +268,16 @@ export const PDFStamper = forwardRef(({ src, specimenAsset, onSpecimenChange, on
                             <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z" />
                         </svg>
                     </button>
-                    <span className="text-xs font-medium w-12 text-center text-gray-200 select-none">
-                        {(scale * 100).toFixed(0)}%
-                    </span>
+                    <input
+                        type="number"
+                        value={Math.round(scale * 100)}
+                        onChange={(e) => {
+                            const val = Number(e.target.value);
+                            if (val > 0) setScale(val / 100);
+                        }}
+                        className="w-12 text-center bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-0.5"
+                    />
+                    <span className="text-xs font-medium text-gray-400 pr-1 select-none">%</span>
                     <button
                         type="button"
                         onClick={() => setScale(s => Math.min(3, s + 0.2))}
