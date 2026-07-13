@@ -133,6 +133,23 @@ export const PDFStamper = forwardRef(({ src, specimenAsset, onSpecimenChange, on
         if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
     }, [stamps, onSpecimenChange]);
 
+    // Intercept pinch-to-zoom so it zooms the PDF, not the browser window
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                setScale(s => Math.min(3, Math.max(0.5, s + delta)));
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, []);
+
     const handleAddSpecimen = async () => {
         if (!pdfDoc) return;
 
@@ -152,6 +169,21 @@ export const PDFStamper = forwardRef(({ src, specimenAsset, onSpecimenChange, on
             if (currentPageIndex > pdfDoc.numPages - 1) currentPageIndex = pdfDoc.numPages - 1;
         }
 
+        // Calculate aspect ratio dynamically so the stamp is never stretched
+        const img = new Image();
+        img.src = specimenAsset;
+        await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve; // Fallback if image fails to load
+        });
+
+        let initialWidth = 150;
+        let initialHeight = 60;
+        if (img.width && img.height) {
+            const aspect = img.height / img.width;
+            initialHeight = initialWidth * aspect;
+        }
+
         setStamps(prev => [
             ...prev,
             {
@@ -159,8 +191,8 @@ export const PDFStamper = forwardRef(({ src, specimenAsset, onSpecimenChange, on
                 pageIndex: currentPageIndex,
                 x: 50,
                 y: 50,
-                width: 150,
-                height: 60,
+                width: initialWidth,
+                height: initialHeight,
             }
         ]);
     };
