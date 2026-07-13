@@ -10,7 +10,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }) => {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
-    const [renderTask, setRenderTask] = useState(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
     useEffect(() => {
@@ -19,9 +18,9 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
         const renderPage = async () => {
             if (!pdfDoc || !canvasRef.current) return;
             
-            // Get the unscaled viewport to determine base aspect ratio
+            // Get the unscaled viewport to determine base aspect ratio, considering page rotation
             const page = await pdfDoc.getPage(pageNumber);
-            const viewport = page.getViewport({ scale });
+            const viewport = page.getViewport({ scale, rotation: page.rotate });
             
             setDimensions({
                 width: viewport.width,
@@ -48,8 +47,6 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
                 transform: transform,
                 viewport: viewport,
             });
-
-            setRenderTask(activeRenderTask);
 
             try {
                 await activeRenderTask.promise;
@@ -100,6 +97,7 @@ const PDFPage = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }
                         });
                     }}
                     bounds="parent"
+                    lockAspectRatio={true}
                     className="border-2 border-blue-500 bg-blue-500/10 cursor-move hover:bg-blue-500/20 transition-colors"
                 >
                     <img src={specimenAsset} className="w-full h-full object-contain pointer-events-none" alt="specimen" />
