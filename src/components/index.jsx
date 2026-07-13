@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Modular Components
 import { Toolbar } from './Toolbar';
 import { Document } from './Document';
-import { flattenPDFWithStamps } from './pdfUtils';
+import { flattenPDFWithStamps } from '../utils/pdfUtils';
 
 // Vite/Bun worker import
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';

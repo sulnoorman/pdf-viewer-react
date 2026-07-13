@@ -63,12 +63,12 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                 const textContent = await page.getTextContent();
                 if (textLayerRef.current) {
                     textLayerRef.current.innerHTML = '';
-                    pdfjsLib.renderTextLayer({
+                    const textLayer = new pdfjsLib.TextLayer({
                         textContentSource: textContent,
                         container: textLayerRef.current,
                         viewport: viewport,
-                        textDivs: []
                     });
+                    await textLayer.render();
                 }
 
             } catch (err) {
