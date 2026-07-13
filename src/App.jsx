@@ -10,11 +10,12 @@ export default function App() {
     try {
         const flattenedPdfFile = await stamperRef.current.getFlattenedPDF();
         const url = URL.createObjectURL(flattenedPdfFile);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'signed-document.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
+        console.log(url)
+        // const a = document.createElement('a');
+        // a.href = url;
+        // a.download = 'signed-document.pdf';
+        // a.click();
+        // URL.revokeObjectURL(url);
     } catch (e) {
         alert("Failed to download: " + e.message);
     }
