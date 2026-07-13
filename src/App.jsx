@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { PDFStamper } from './PDFStamper';
+import { PDFStamper } from './components';
 
 export default function App() {
   const stamperRef = useRef(null);

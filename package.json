@@ -1,8 +1,18 @@
 {
-  "name": "pdf-stamper-app",
-  "private": true,
-  "version": "0.0.0",
+  "name": "react-pdf-viewer-stamping",
+  "version": "1.0.0",
   "type": "module",
+  "main": "dist/react-pdf-viewer-stamping.umd.cjs",
+  "module": "dist/react-pdf-viewer-stamping.js",
+  "exports": {
+    ".": {
+      "import": "./dist/react-pdf-viewer-stamping.js",
+      "require": "./dist/react-pdf-viewer-stamping.umd.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -13,9 +23,11 @@
     "@tailwindcss/vite": "^4.3.2",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.1.200",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
     "react-rnd": "^10.5.3"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -26,6 +38,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.2",
     "vite": "^8.1.1"
   }
