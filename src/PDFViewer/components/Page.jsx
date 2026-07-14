@@ -133,10 +133,11 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     return (
         <div 
             ref={containerRef}
-            className="relative mb-2 shadow-[0_1px_4px_rgba(0,0,0,0.3)] bg-white origin-top" 
+            className="relative shadow-sm bg-white origin-top border border-gray-400" 
             style={{ 
                 width: currentWidth > 0 ? currentWidth * cssScale : 'auto',
                 height: currentHeight > 0 ? currentHeight * cssScale : 'auto',
+                marginBottom: 24 * scale, // Scale the gap so pages never look glued together
             }}
             onMouseDown={(e) => {
                 if (e.target === canvasRef.current || e.target === containerRef.current) {
