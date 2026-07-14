@@ -10,6 +10,8 @@ import { flattenPDFWithStamps } from '../utils/pdfUtils';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
+import 'pdfjs-dist/web/pdf_viewer.css';
+
 export const PDFViewer = forwardRef(({ src, config }, ref) => {
     const {
         specimenAsset,

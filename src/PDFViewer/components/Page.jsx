@@ -5,6 +5,7 @@ import { Stamp } from './Stamp';
 export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
+    const annotationLayerRef = useRef(null);
     const containerRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     
@@ -97,6 +98,44 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     await textLayer.render();
                 }
 
+                // Render Annotation Layer (Links, Forms, etc.)
+                const annotations = await page.getAnnotations();
+                if (annotationLayerRef.current && annotations.length > 0) {
+                    annotationLayerRef.current.innerHTML = '';
+                    
+                    // SimpleLinkService mock for basic link rendering without complex routing
+                    const simpleLinkService = {
+                        getDestinationHash: () => '',
+                        navigateTo: () => {},
+                        getAnchorUrl: () => '',
+                        setDocument: () => {},
+                        executeNamedAction: () => {},
+                        cachePageRef: () => {},
+                        isPageVisible: () => true,
+                        isPageCached: () => true,
+                        page: pageNumber
+                    };
+
+                    const annotationLayer = new pdfjsLib.AnnotationLayer({
+                        page: page,
+                        viewport: viewport.clone({ dontFlip: true }),
+                        div: annotationLayerRef.current,
+                        annotations: annotations,
+                        linkService: simpleLinkService,
+                        downloadManager: null,
+                        renderInteractiveForms: true
+                    });
+
+                    await annotationLayer.render({
+                        annotations: annotations,
+                        div: annotationLayerRef.current,
+                        page: page,
+                        viewport: viewport.clone({ dontFlip: true }),
+                        linkService: simpleLinkService,
+                        renderInteractiveForms: true
+                    });
+                }
+
             } catch (err) {
                 if (err?.name !== 'RenderingCancelledException') {
                     console.error('Render error:', err);
@@ -168,6 +207,20 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                         overflow: 'hidden',
                         lineHeight: 1.0,
                         opacity: 1, // Let users see selection highlights
+                        '--scale-factor': canvasScale,
+                        '--total-scale-factor': canvasScale
+                    }}
+                />
+                <div 
+                    ref={annotationLayerRef} 
+                    className="annotationLayer" 
+                    style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        overflow: 'hidden',
                         '--scale-factor': canvasScale,
                         '--total-scale-factor': canvasScale
                     }}
