@@ -29,13 +29,15 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         onDownload,
         canDownload = true,
         allowMultipleStamps = true,
-        maxStamps = null
+        maxStamps = null,
+        customToolbarActions = []
     } = config || {};
     
     const [pdfDoc, setPdfDoc] = useState(null);
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
+    const [textStamps, setTextStamps] = useState([]);
     const [activeStampId, setActiveStampId] = useState(null);
     
     // Settings
@@ -203,6 +205,28 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     };
 
     useImperativeHandle(ref, () => ({
+        addTextStamp: ({ text, fontSize = 16, color = '#000000', fontFamily = 'Helvetica' }) => {
+            let currentPageIndex = 0;
+            if (documentRef.current) {
+                currentPageIndex = documentRef.current.getActivePageIndex();
+            }
+            
+            setTextStamps(prev => [
+                ...prev,
+                {
+                    id: `text-${Date.now()}`,
+                    pageIndex: currentPageIndex,
+                    x: 50,
+                    y: 50,
+                    width: 250,
+                    height: 50,
+                    text: text,
+                    fontSize: fontSize,
+                    color: color,
+                    fontFamily: fontFamily
+                }
+            ]);
+        },
         getFlattenedPDF: async () => {
             try {
                 const existingPdfBytes = await fetch(src).then(res => res.arrayBuffer());
@@ -254,6 +278,29 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                         });
                     }
                 }
+                
+                // 3. Draw Text Stamps
+                if (textStamps.length > 0) {
+                    textStamps.forEach(stamp => {
+                        const pageIndex = stamp.pageIndex || 0;
+                        if (pageIndex < 0 || pageIndex >= pages.length) return;
+                        
+                        const page = pages[pageIndex];
+                        const { height: pageHeight } = page.getSize();
+                        
+                        // We map the color string to pdf-lib rgb
+                        page.drawText(stamp.text, {
+                            x: stamp.x,
+                            // SVG/DOM y is from top, PDF y is from bottom.
+                            // In HTML, y=0 is top. In PDF, y=pageHeight is top.
+                            // We must subtract the text height to align perfectly.
+                            y: pageHeight - stamp.y - (stamp.fontSize || 14), 
+                            size: stamp.fontSize || 14,
+                            color: hexToRgb(stamp.color || '#000000'),
+                            lineHeight: (stamp.fontSize || 14) * 1.2
+                        });
+                    });
+                }
     
                 const pdfBytes = await pdfDocLib.save();
                 return new Blob([pdfBytes], { type: 'application/pdf' });
@@ -266,6 +313,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
 
     const handleDeleteStamp = (id) => {
         setStamps(prev => prev.filter(s => s.id !== id));
+        setTextStamps(prev => prev.filter(s => s.id !== id));
         setActiveStampId(null);
     };
 
@@ -294,6 +342,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 undoInk={undoInk}
                 canRedoInk={canRedoInk}
                 redoInk={redoInk}
+                customToolbarActions={customToolbarActions}
             />
             <Document 
                 ref={documentRef}
@@ -301,6 +350,8 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 scale={scale} 
                 stamps={stamps} 
                 setStamps={setStamps} 
+                textStamps={textStamps}
+                setTextStamps={setTextStamps}
                 inkAnnotations={inkAnnotations}
                 setInkAnnotations={handleSetInkAnnotations}
                 isDrawMode={isDrawMode}

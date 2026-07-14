@@ -1,7 +1,7 @@
 import { Page } from './Page';
 import { forwardRef, useImperativeHandle, useEffect, useRef, useState } from 'react';
 
-export const Document = forwardRef(({ pdfDoc, scale, stamps, setStamps, specimenAsset, scrollContainerRef, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }, ref) => {
+export const Document = forwardRef(({ pdfDoc, scale, stamps, setStamps, textStamps, setTextStamps, specimenAsset, scrollContainerRef, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }, ref) => {
     const activePageIndex = useRef(0);
 
     useEffect(() => {
@@ -53,6 +53,8 @@ export const Document = forwardRef(({ pdfDoc, scale, stamps, setStamps, specimen
                     scale={scale}
                     stamps={stamps}
                     setStamps={setStamps}
+                    textStamps={textStamps}
+                    setTextStamps={setTextStamps}
                     specimenAsset={specimenAsset}
                     activeStampId={activeStampId}
                     setActiveStampId={setActiveStampId}
