@@ -150,126 +150,9 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
 
     const handleDeleteStamp = (id) => {
         setStamps(prev => prev.filter(s => s.id !== id));
+        setTextStamps(prev => prev.filter(s => s.id !== id));
         setActiveStampId(null);
     };
-
-    useImperativeHandle(ref, () => ({
-        getFlattenedPDF: async () => {
-            try {
-                const existingPdfBytes = await fetch(src).then(res => res.arrayBuffer());
-                const pdfDocLib = await PDFDocument.load(existingPdfBytes);
-                const pages = pdfDocLib.getPages();
-
-                // 1. Draw Stamps
-                if (stamps.length > 0 && specimenAsset) {
-                    const specimenBytes = await fetch(specimenAsset).then(res => res.arrayBuffer());
-                    const isPng = specimenAsset.toLowerCase().endsWith('.png');
-                    const image = isPng
-                        ? await pdfDocLib.embedPng(specimenBytes)
-                        : await pdfDocLib.embedJpg(specimenBytes);
-
-                    stamps.forEach(stamp => {
-                        const pageIndex = stamp.pageIndex || 0;
-                        if (pageIndex < 0 || pageIndex >= pages.length) return;
-
-                        const page = pages[pageIndex];
-                        const { height: pageHeight } = page.getSize();
-
-                        page.drawImage(image, {
-                            x: stamp.x,
-                            y: pageHeight - stamp.y - stamp.height,
-                            width: stamp.width,
-                            height: stamp.height,
-                        });
-                    });
-                }
-
-                // 2. Draw Ink Annotations (Coret-coret)
-                for (const [pageIndexStr, paths] of Object.entries(inkAnnotations)) {
-                    const pageIndex = parseInt(pageIndexStr, 10);
-                    if (pageIndex < 0 || pageIndex >= pages.length) continue;
-
-                    const page = pages[pageIndex];
-                    const { height: pageHeight } = page.getSize();
-
-                    for (const path of paths) {
-                        if (!path || path.points.length < 2) continue;
-
-                        const svgPath = `M ${path.points.map(p => `${p.x},${p.y}`).join(' L ')}`;
-                        page.drawSvgPath(svgPath, {
-                            x: 0,
-                            y: pageHeight, // anchors the top-left of SVG to the top-left of the PDF page
-                            borderColor: hexToRgb(path.color),
-                            borderWidth: path.strokeWidth,
-                            borderOpacity: path.opacity || 1,
-                        });
-                    }
-                }
-
-                const pdfBytes = await pdfDocLib.save();
-                return new Blob([pdfBytes], { type: 'application/pdf' });
-            } catch (error) {
-                console.error("Error flattening PDF:", error);
-                throw error;
-            }
-        }
-    }));
-
-    // Reactively update scale when zoomMode or window size changes
-    useEffect(() => {
-        if (zoomMode === 'custom' || !pdfDoc) return;
-
-        const updateScale = async () => {
-            const newScale = await calculateScaleForMode(zoomMode);
-            if (newScale) {
-                setScale(Math.max(0.1, Math.min(newScale, 5)));
-            }
-        };
-
-        updateScale();
-
-        const handleResize = () => updateScale();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [zoomMode, pdfDoc]);
-
-    useEffect(() => {
-        if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
-    }, [stamps, onSpecimenChange]);
-
-    // Intercept pinch-to-zoom so it zooms the PDF, not the browser window
-    useEffect(() => {
-        const container = scrollContainerRef.current;
-        if (!container) return;
-
-        const handleWheel = (e) => {
-            if (e.ctrlKey) {
-                e.preventDefault();
-                const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                setScale(s => Math.min(5, Math.max(0.1, s + delta)));
-                setZoomMode('custom');
-            }
-        };
-
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => container.removeEventListener('wheel', handleWheel);
-    }, []);
-
-    useEffect(() => {
-        if (!src) return;
-        let activeDoc = null;
-        const loadPdf = async () => {
-            const loadingTask = pdfjsLib.getDocument({ url: src });
-            activeDoc = await loadingTask.promise;
-            setPdfDoc(activeDoc);
-        };
-        loadPdf();
-        return () => {
-            if (activeDoc && typeof activeDoc.destroy === 'function') {
-                activeDoc.destroy();
-            }
-        };
-    }, [src]);
 
     useImperativeHandle(ref, () => ({
         addTextStamp: ({ text, fontSize = 16, color = '#000000', fontFamily = 'Helvetica' }) => {
@@ -378,11 +261,61 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         }
     }));
 
-    const handleDeleteStamp = (id) => {
-        setStamps(prev => prev.filter(s => s.id !== id));
-        setTextStamps(prev => prev.filter(s => s.id !== id));
-        setActiveStampId(null);
-    };
+    // Reactively update scale when zoomMode or window size changes
+    useEffect(() => {
+        if (zoomMode === 'custom' || !pdfDoc) return;
+
+        const updateScale = async () => {
+            const newScale = await calculateScaleForMode(zoomMode);
+            if (newScale) {
+                setScale(Math.max(0.1, Math.min(newScale, 5)));
+            }
+        };
+
+        updateScale();
+
+        const handleResize = () => updateScale();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [zoomMode, pdfDoc]);
+
+    useEffect(() => {
+        if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
+    }, [stamps, onSpecimenChange]);
+
+    // Intercept pinch-to-zoom so it zooms the PDF, not the browser window
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                setScale(s => Math.min(5, Math.max(0.1, s + delta)));
+                setZoomMode('custom');
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, []);
+
+    useEffect(() => {
+        if (!src) return;
+        let activeDoc = null;
+        const loadPdf = async () => {
+            const loadingTask = pdfjsLib.getDocument({ url: src });
+            activeDoc = await loadingTask.promise;
+            setPdfDoc(activeDoc);
+        };
+        loadPdf();
+        return () => {
+            if (activeDoc && typeof activeDoc.destroy === 'function') {
+                activeDoc.destroy();
+            }
+        };
+    }, [src]);
 
     return (
         <div className="flex flex-col w-full h-full bg-[#2a2a2e] overflow-hidden font-sans">
@@ -413,19 +346,12 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
             />
             <Document
                 ref={documentRef}
-<<<<<<< HEAD
-                pdfDoc={pdfDoc}
-                scale={scale}
-                stamps={stamps}
-                setStamps={setStamps}
-=======
                 pdfDoc={pdfDoc}
                 scale={scale}
                 stamps={stamps}
                 setStamps={setStamps}
                 textStamps={textStamps}
                 setTextStamps={setTextStamps}
->>>>>>> react-pdf-viewer-stamping
                 inkAnnotations={inkAnnotations}
                 setInkAnnotations={handleSetInkAnnotations}
                 isDrawMode={isDrawMode}
