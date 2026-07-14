@@ -1,4 +1,4 @@
-export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, onDownload, canDownload }) => {
+export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, onDownload, canDownload, isDrawMode, setIsDrawMode }) => {
     const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
     const isCustomScale = zoomMode === 'custom' && !presetScales.includes(scale);
 
@@ -70,6 +70,21 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
             </div>
 
             <div className="flex items-center gap-3">
+                <button
+                    type='button'
+                    onClick={() => setIsDrawMode(!isDrawMode)}
+                    className={`px-3 py-1.5 border text-xs font-medium rounded transition-colors flex items-center gap-2 cursor-pointer ${
+                        isDrawMode 
+                            ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700' 
+                            : 'bg-[#424649] border-[#525659] text-gray-200 hover:bg-[#525659] hover:text-white'
+                    }`}
+                >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    Draw
+                </button>
+                <div className="w-px h-6 bg-[#525659] mx-1"></div>
                 <button
                     type='button'
                     onClick={onAddStamp}

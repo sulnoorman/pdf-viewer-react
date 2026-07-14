@@ -29,8 +29,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         onDownload,
         canDownload = true,
         allowMultipleStamps = true,
-        maxStamps = null,
-        isDrawMode = false
+        maxStamps = null
     } = config || {};
     
     const [pdfDoc, setPdfDoc] = useState(null);
@@ -38,6 +37,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
     const [inkAnnotations, setInkAnnotations] = useState({});
+    const [isDrawMode, setIsDrawMode] = useState(false);
     const [activeStampId, setActiveStampId] = useState(null);
     const scrollContainerRef = useRef(null);
     const documentRef = useRef(null);
@@ -243,6 +243,8 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 onAddStamp={handleAddSpecimen} 
                 onDownload={onDownload} 
                 canDownload={canDownload} 
+                isDrawMode={isDrawMode}
+                setIsDrawMode={setIsDrawMode}
             />
             <Document 
                 ref={documentRef}
