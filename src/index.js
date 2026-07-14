@@ -1,1 +1,1 @@
-export { PDFStamper } from './components/index.jsx';
+export { PDFViewer } from './PDFViewer/index.jsx';
