@@ -28,36 +28,47 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
             
             // Get the unscaled viewport to determine base aspect ratio, considering page rotation
             const page = await pdfDoc.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: renderedScale, rotation: page.rotate });
+            const viewport = page.getViewport({ scale: renderedScale });
             
             setDimensions({
                 width: viewport.width,
                 height: viewport.height
             });
 
-            const canvas = canvasRef.current;
-            const context = canvas.getContext('2d', { alpha: false });
-
-            // High DPI support
             const outputScale = window.devicePixelRatio || 1;
+            const targetWidth = Math.floor(viewport.width * outputScale);
+            const targetHeight = Math.floor(viewport.height * outputScale);
             
-            canvas.width = Math.floor(viewport.width * outputScale);
-            canvas.height = Math.floor(viewport.height * outputScale);
-            canvas.style.width = Math.floor(viewport.width) + "px";
-            canvas.style.height =  Math.floor(viewport.height) + "px";
+            // Render to an offscreen canvas to prevent flicker (blank canvas) during async render
+            const renderCanvas = document.createElement('canvas');
+            renderCanvas.width = targetWidth;
+            renderCanvas.height = targetHeight;
+            const renderContext = renderCanvas.getContext('2d', { alpha: false });
 
             const transform = outputScale !== 1
                 ? [outputScale, 0, 0, outputScale, 0, 0]
                 : null;
 
             activeRenderTask = page.render({
-                canvasContext: context,
+                canvasContext: renderContext,
                 transform: transform,
                 viewport: viewport,
             });
 
             try {
                 await activeRenderTask.promise;
+
+                // Only update the visible canvas AFTER rendering is perfectly complete
+                if (canvasRef.current) {
+                    const canvas = canvasRef.current;
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    canvas.style.width = Math.floor(viewport.width) + "px";
+                    canvas.style.height =  Math.floor(viewport.height) + "px";
+                    
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    ctx.drawImage(renderCanvas, 0, 0);
+                }
 
                 // Render Text Layer
                 const textContent = await page.getTextContent();
@@ -140,6 +151,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                         overflow: 'hidden',
                         lineHeight: 1.0,
                         opacity: 1, // Let users see selection highlights
+                        '--scale-factor': renderedScale
                     }}
                 />
             </div>
