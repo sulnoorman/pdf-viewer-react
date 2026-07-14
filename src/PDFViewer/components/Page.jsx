@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Stamp } from './Stamp';
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset }) => {
+export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const containerRef = useRef(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-    const [activeStampId, setActiveStampId] = useState(null);
     
     // Smooth zoom state
     const [debouncedScale, setDebouncedScale] = useState(scale);

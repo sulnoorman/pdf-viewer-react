@@ -15,6 +15,7 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
+    const [activeStampId, setActiveStampId] = useState(null);
     const scrollContainerRef = useRef(null);
 
     useEffect(() => {
@@ -171,6 +172,8 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
                 setStamps={setStamps} 
                 specimenAsset={specimenAsset} 
                 scrollContainerRef={scrollContainerRef}
+                activeStampId={activeStampId}
+                setActiveStampId={setActiveStampId}
             />
         </div>
     );

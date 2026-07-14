@@ -1,6 +1,6 @@
 import { Page } from './Page';
 
-export const Document = ({ pdfDoc, scale, stamps, setStamps, specimenAsset, scrollContainerRef }) => {
+export const Document = ({ pdfDoc, scale, stamps, setStamps, specimenAsset, scrollContainerRef, activeStampId, setActiveStampId }) => {
     return (
         <div ref={scrollContainerRef} className="flex-1 overflow-auto py-8 flex flex-col items-center relative">
             {pdfDoc && Array.from({ length: pdfDoc.numPages }).map((_, i) => (
@@ -12,6 +12,8 @@ export const Document = ({ pdfDoc, scale, stamps, setStamps, specimenAsset, scro
                     stamps={stamps}
                     setStamps={setStamps}
                     specimenAsset={specimenAsset}
+                    activeStampId={activeStampId}
+                    setActiveStampId={setActiveStampId}
                 />
             ))}
         </div>

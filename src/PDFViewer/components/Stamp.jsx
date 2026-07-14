@@ -6,6 +6,7 @@ export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, update
             size={{ width: stamp.width, height: stamp.height }}
             position={{ x: stamp.x, y: stamp.y }}
             onDragStart={() => setActiveStampId(stamp.id)}
+            onMouseDown={() => setActiveStampId(stamp.id)}
             onDragStop={(e, d) => updateStamp(stamp.id, { x: d.x, y: d.y })}
             onResizeStart={() => setActiveStampId(stamp.id)}
             onResizeStop={(e, direction, ref, delta, position) => {
