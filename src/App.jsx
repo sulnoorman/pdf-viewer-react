@@ -26,10 +26,14 @@ export default function App() {
       <PDFViewer
         ref={stamperRef}
         src="/guide-qa.pdf"
-        specimenAsset="/Tandatangan.png"
-        onSpecimenChange={(isPlaced) => setHasSpecimen(isPlaced)}
-        onDownload={handleDownload}
-        canDownload={hasSpecimen}
+        config={{
+          specimenAsset: "/Tandatangan.png",
+          onSpecimenChange: (isPlaced) => setHasSpecimen(isPlaced),
+          onDownload: handleDownload,
+          canDownload: hasSpecimen,
+          allowMultipleStamps: true,
+          maxStamps: 5, // Example usage of the new limit
+        }}
       />
     </div>
   );
