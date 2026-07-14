@@ -23,13 +23,9 @@ export default function App() {
 
   return (
     <div className="w-screen h-screen overflow-hidden flex flex-col bg-gray-200">
-      {/* 
-        This wrapper mimics an iframe container in a real app.
-        The PDFStamper is designed to fill its parent container entirely (w-full h-full).
-      */}
       <PDFViewer
         ref={stamperRef}
-        src="/sample.pdf"
+        src="/guide-qa.pdf"
         specimenAsset="/Tandatangan.png"
         onSpecimenChange={(isPlaced) => setHasSpecimen(isPlaced)}
         onDownload={handleDownload}

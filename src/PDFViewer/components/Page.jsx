@@ -136,7 +136,6 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
             style={{ 
                 width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',
                 height: dimensions.height > 0 ? dimensions.height * cssScale : 'auto',
-                marginBottom: 24 * scale, // Scale the gap so pages never look glued together
             }}
             onMouseDown={(e) => {
                 if (e.target === canvasRef.current || e.target === containerRef.current) {
