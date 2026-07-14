@@ -1,7 +1,7 @@
+import './App.css';
 import { useState, useRef } from 'react';
 import { PDFViewer } from './PDFViewer';
 import IconFileText from '@tabler/icons-react/dist/esm/icons/IconFileText.mjs';
-import './App.css';
 
 export default function App() {
   const stamperRef = useRef(null);
@@ -32,7 +32,7 @@ export default function App() {
           specimenAsset: '/Tandatangan.png',
           onSpecimenChange: (isPlaced) => setHasSpecimen(isPlaced),
           onDownload: handleDownload,
-          canDownload: true,
+          canDownload: hasSpecimen,
           allowMultipleStamps: true,
           maxStamps: 5,
           customToolbarActions: [
@@ -41,7 +41,6 @@ export default function App() {
               label: 'Ambil Nomor',
               icon: <IconFileText size={14} stroke={2} />,
               onClick: () => {
-                // Simulate fetching a number from API
                 const fakeNumber = "123/IT-DEV/VIII/2026";
                 if (stamperRef.current) {
                   stamperRef.current.addTextStamp({
