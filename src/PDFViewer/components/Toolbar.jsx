@@ -1,4 +1,7 @@
-export const Toolbar = ({ scale, setScale, onAddStamp, onDownload, canDownload }) => {
+export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, onDownload, canDownload }) => {
+    const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+    const isCustomScale = zoomMode === 'custom' && !presetScales.includes(scale);
+
     return (
         <div className="flex items-center justify-between px-4 py-2 bg-[#323639] border-b border-[#202224] shadow-md z-10 text-white h-12 shrink-0">
             <div className="flex items-center gap-2">
@@ -16,16 +19,44 @@ export const Toolbar = ({ scale, setScale, onAddStamp, onDownload, canDownload }
                         <path d="M4 8a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7A.5.5 0 0 1 4 8z" />
                     </svg>
                 </button>
-                <input
-                    type="number"
-                    value={Math.round(scale * 100)}
-                    onChange={(e) => {
-                        const val = Number(e.target.value);
-                        if (val > 0) setScale(val / 100);
-                    }}
-                    className="w-12 text-center bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-0.5"
-                />
-                <span className="text-xs font-medium text-gray-400 pr-1 select-none">%</span>
+                <div className="relative flex items-center">
+                    <select
+                        value={zoomMode === 'custom' ? scale.toString() : zoomMode}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            if (['auto', 'page-fit', 'page-width', 'actual-size'].includes(val)) {
+                                setZoomMode(val);
+                            } else {
+                                setScale(parseFloat(val));
+                            }
+                        }}
+                        className="w-[120px] bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-1 pl-2 pr-4 appearance-none cursor-pointer hover:bg-[#525659] transition-colors"
+                    >
+                        <option value="auto">Automatic Zoom</option>
+                        <option value="actual-size">Actual Size</option>
+                        <option value="page-fit">Page Fit</option>
+                        <option value="page-width">Page Width</option>
+                        <option disabled>──────────</option>
+                        <option value="0.5">50%</option>
+                        <option value="0.75">75%</option>
+                        <option value="1">100%</option>
+                        <option value="1.25">125%</option>
+                        <option value="1.5">150%</option>
+                        <option value="2">200%</option>
+                        <option value="3">300%</option>
+                        <option value="4">400%</option>
+                        {isCustomScale && (
+                            <option value={scale.toString()} hidden>
+                                {Math.round(scale * 100)}%
+                            </option>
+                        )}
+                    </select>
+                    <div className="absolute right-2 pointer-events-none">
+                        <svg className="w-3 h-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </div>
                 <button
                     type="button"
                     onClick={() => setScale(s => Math.min(3, s + 0.2))}

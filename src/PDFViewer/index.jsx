@@ -13,6 +13,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onDownload, canDownload }, ref) => {
     const [pdfDoc, setPdfDoc] = useState(null);
     const [scale, setScale] = useState(1.0);
+    const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
     const scrollContainerRef = useRef(null);
 
@@ -32,6 +33,50 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
         };
     }, [src]);
 
+    const calculateScaleForMode = async (mode) => {
+        if (!pdfDoc || !scrollContainerRef.current) return null;
+        
+        const container = scrollContainerRef.current;
+        const page = await pdfDoc.getPage(1);
+        const viewport = page.getViewport({ scale: 1 });
+        
+        // Padding to ensure scrollbars don't immediately appear and look nice
+        const paddingX = 40; 
+        const paddingY = 40;
+
+        if (mode === 'page-width') {
+            return (container.clientWidth - paddingX) / viewport.width;
+        } else if (mode === 'page-fit') {
+            const scaleX = (container.clientWidth - paddingX) / viewport.width;
+            const scaleY = (container.clientHeight - paddingY) / viewport.height;
+            return Math.min(scaleX, scaleY);
+        } else if (mode === 'auto') {
+            const newScale = (container.clientWidth - paddingX) / viewport.width;
+            return Math.min(newScale, 1.25); // Cap auto zoom to 125%
+        } else if (mode === 'actual-size') {
+            return 1;
+        }
+        return null;
+    };
+
+    // Reactively update scale when zoomMode or window size changes
+    useEffect(() => {
+        if (zoomMode === 'custom' || !pdfDoc) return;
+
+        const updateScale = async () => {
+            const newScale = await calculateScaleForMode(zoomMode);
+            if (newScale) {
+                setScale(Math.max(0.1, Math.min(newScale, 5)));
+            }
+        };
+
+        updateScale();
+
+        const handleResize = () => updateScale();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [zoomMode, pdfDoc]);
+
     useEffect(() => {
         if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
     }, [stamps, onSpecimenChange]);
@@ -46,6 +91,7 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? -0.1 : 0.1;
                 setScale(s => Math.min(5, Math.max(0.1, s + delta)));
+                setZoomMode('custom');
             }
         };
 
@@ -108,7 +154,12 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
         <div className="flex flex-col w-full h-full bg-[#2a2a2e] overflow-hidden font-sans">
             <Toolbar 
                 scale={scale} 
-                setScale={setScale} 
+                setScale={(newScale) => {
+                    setScale(newScale);
+                    setZoomMode('custom');
+                }} 
+                zoomMode={zoomMode}
+                setZoomMode={setZoomMode}
                 onAddStamp={handleAddSpecimen} 
                 onDownload={onDownload} 
                 canDownload={canDownload} 
