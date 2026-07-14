@@ -16,7 +16,7 @@ export const Toolbar = ({
     canUndoInk, undoInk, canRedoInk, redoInk,
     customToolbarActions = []
 }) => {
-    const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
+    const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 8, 10];
     const isCustomScale = zoomMode === 'custom' && !presetScales.includes(scale);
 
     const [showDrawSettings, setShowDrawSettings] = useState(false);
@@ -62,6 +62,9 @@ export const Toolbar = ({
                         <option value="2">200%</option>
                         <option value="3">300%</option>
                         <option value="4">400%</option>
+                        <option value="5">500%</option>
+                        <option value="8">800%</option>
+                        <option value="10">1000%</option>
                         {isCustomScale && (
                             <option value={scale.toString()} hidden>
                                 {Math.round(scale * 100)}%
@@ -74,7 +77,7 @@ export const Toolbar = ({
                 </div>
                 <button
                     type="button"
-                    onClick={() => setScale(s => Math.min(3, s + 0.2))}
+                    onClick={() => setScale(s => Math.min(10, s + 0.2))}
                     className="p-1 hover:bg-[#525659] rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
                     title="Zoom In"
                 >
