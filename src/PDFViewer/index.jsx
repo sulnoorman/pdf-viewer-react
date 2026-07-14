@@ -105,7 +105,7 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
     }));
 
     return (
-        <div className="flex flex-col w-full h-full bg-[#525659] overflow-hidden font-sans">
+        <div className="flex flex-col w-full h-full bg-[#2a2a2e] overflow-hidden font-sans">
             <Toolbar 
                 scale={scale} 
                 setScale={setScale} 
