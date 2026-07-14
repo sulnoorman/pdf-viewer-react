@@ -132,7 +132,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     return (
         <div 
             ref={containerRef}
-            className="relative shadow-sm bg-white origin-top border border-gray-400" 
+            className="relative shrink-0 shadow-sm bg-white origin-top border border-gray-400" 
             style={{ 
                 width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',
                 height: dimensions.height > 0 ? dimensions.height * cssScale : 'auto',
