@@ -122,6 +122,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
         if (newData.y !== undefined) unscaledData.y = newData.y / scale;
         if (newData.width !== undefined) unscaledData.width = newData.width / scale;
         if (newData.height !== undefined) unscaledData.height = newData.height / scale;
+        if (newData.pageIndex !== undefined) unscaledData.pageIndex = newData.pageIndex;
 
         setStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
     };
