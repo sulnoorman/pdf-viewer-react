@@ -151,7 +151,8 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                         overflow: 'hidden',
                         lineHeight: 1.0,
                         opacity: 1, // Let users see selection highlights
-                        '--scale-factor': renderedScale
+                        '--scale-factor': 1,
+                        '--total-scale-factor': 1
                     }}
                 />
             </div>
