@@ -4,7 +4,17 @@ import { forwardRef, useState, useEffect, useRef, useImperativeHandle } from 're
 // Modular Components
 import { Toolbar } from './components/Toolbar';
 import { Document } from './components/Document';
-import { flattenPDFWithStamps } from '../utils/pdfUtils';
+import { PDFDocument, rgb } from 'pdf-lib';
+
+// Helper for hex to pdf-lib rgb
+const hexToRgb = (hex) => {
+    // Default to blue if invalid
+    if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return rgb(0.145, 0.388, 0.921);
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    return rgb(r, g, b);
+};
 
 // Vite/Bun worker import
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -26,6 +36,8 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
+    const [inkAnnotations, setInkAnnotations] = useState({});
+    const [isDrawMode, setIsDrawMode] = useState(false);
     const [activeStampId, setActiveStampId] = useState(null);
     const scrollContainerRef = useRef(null);
     const documentRef = useRef(null);
@@ -153,7 +165,64 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     };
 
     useImperativeHandle(ref, () => ({
-        getFlattenedPDF: () => flattenPDFWithStamps(src, specimenAsset, stamps, scale)
+        getFlattenedPDF: async () => {
+            try {
+                const existingPdfBytes = await fetch(src).then(res => res.arrayBuffer());
+                const pdfDocLib = await PDFDocument.load(existingPdfBytes);
+                const pages = pdfDocLib.getPages();
+    
+                // 1. Draw Stamps
+                if (stamps.length > 0 && specimenAsset) {
+                    const specimenBytes = await fetch(specimenAsset).then(res => res.arrayBuffer());
+                    const isPng = specimenAsset.toLowerCase().endsWith('.png');
+                    const image = isPng 
+                        ? await pdfDocLib.embedPng(specimenBytes)
+                        : await pdfDocLib.embedJpg(specimenBytes);
+    
+                    stamps.forEach(stamp => {
+                        const pageIndex = stamp.pageIndex || 0;
+                        if (pageIndex < 0 || pageIndex >= pages.length) return;
+                        
+                        const page = pages[pageIndex];
+                        const { height: pageHeight } = page.getSize();
+                        
+                        page.drawImage(image, {
+                            x: stamp.x,
+                            y: pageHeight - stamp.y - stamp.height, 
+                            width: stamp.width,
+                            height: stamp.height,
+                        });
+                    });
+                }
+    
+                // 2. Draw Ink Annotations (Coret-coret)
+                for (const [pageIndexStr, paths] of Object.entries(inkAnnotations)) {
+                    const pageIndex = parseInt(pageIndexStr, 10);
+                    if (pageIndex < 0 || pageIndex >= pages.length) continue;
+                    
+                    const page = pages[pageIndex];
+                    const { height: pageHeight } = page.getSize();
+                    
+                    for (const path of paths) {
+                        if (!path || path.points.length < 2) continue;
+                        
+                        const svgPath = `M ${path.points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+                        page.drawSvgPath(svgPath, {
+                            x: 0,
+                            y: pageHeight, // anchors the top-left of SVG to the top-left of the PDF page
+                            borderColor: hexToRgb(path.color),
+                            borderWidth: path.strokeWidth,
+                        });
+                    }
+                }
+    
+                const pdfBytes = await pdfDocLib.save();
+                return new Blob([pdfBytes], { type: 'application/pdf' });
+            } catch (error) {
+                console.error("Error flattening PDF:", error);
+                throw error;
+            }
+        }
     }));
 
     const handleDeleteStamp = (id) => {
@@ -174,6 +243,8 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 onAddStamp={handleAddSpecimen} 
                 onDownload={onDownload} 
                 canDownload={canDownload} 
+                isDrawMode={isDrawMode}
+                setIsDrawMode={setIsDrawMode}
             />
             <Document 
                 ref={documentRef}
@@ -181,6 +252,9 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 scale={scale} 
                 stamps={stamps} 
                 setStamps={setStamps} 
+                inkAnnotations={inkAnnotations}
+                setInkAnnotations={setInkAnnotations}
+                isDrawMode={isDrawMode}
                 specimenAsset={specimenAsset} 
                 scrollContainerRef={scrollContainerRef}
                 activeStampId={activeStampId}

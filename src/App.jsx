@@ -32,7 +32,7 @@ export default function App() {
           onDownload: handleDownload,
           canDownload: hasSpecimen,
           allowMultipleStamps: true,
-          maxStamps: 5, // Example usage of the new limit
+          maxStamps: 5,
         }}
       />
     </div>
