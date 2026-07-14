@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { 
-    IconZoomOut, IconZoomIn, IconChevronDown, 
-    IconArrowBackUp, IconArrowForwardUp, 
-    IconPencil, IconRubberStamp, IconDownload 
-} from '@tabler/icons-react';
+import IconZoomOut from '@tabler/icons-react/dist/esm/icons/IconZoomOut.mjs';
+import IconZoomIn from '@tabler/icons-react/dist/esm/icons/IconZoomIn.mjs';
+import IconChevronDown from '@tabler/icons-react/dist/esm/icons/IconChevronDown.mjs';
+import IconArrowBackUp from '@tabler/icons-react/dist/esm/icons/IconArrowBackUp.mjs';
+import IconArrowForwardUp from '@tabler/icons-react/dist/esm/icons/IconArrowForwardUp.mjs';
+import IconPencil from '@tabler/icons-react/dist/esm/icons/IconPencil.mjs';
+import IconRubberStamp from '@tabler/icons-react/dist/esm/icons/IconRubberStamp.mjs';
+import IconDownload from '@tabler/icons-react/dist/esm/icons/IconDownload.mjs';
 
 export const Toolbar = ({ 
     scale, setScale, zoomMode, setZoomMode, 
