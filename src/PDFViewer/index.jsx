@@ -175,6 +175,47 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
     }, [stamps, onSpecimenChange]);
 
+    const pendingScrollRef = useRef(null);
+    const prevScaleRef = useRef(scale);
+
+    // Zoom-to-pointer post-render adjustment
+    useEffect(() => {
+        const prevScale = prevScaleRef.current;
+        prevScaleRef.current = scale;
+
+        if (scale !== prevScale && scrollContainerRef.current) {
+            const container = scrollContainerRef.current;
+            const containerRect = container.getBoundingClientRect();
+
+            if (pendingScrollRef.current) {
+                // We zoomed via mouse wheel (pinch), adjust scroll to keep mouse on same page content
+                if (pendingScrollRef.current.pageIndex !== undefined) {
+                    const { pageIndex, normX, normY, targetClientX, targetClientY } = pendingScrollRef.current;
+                    const pageEl = container.querySelector(`.pdf-page-container[data-page-index="${pageIndex}"]`);
+                    if (pageEl) {
+                        const pageRect = pageEl.getBoundingClientRect();
+                        const currentClientX = pageRect.left + (pageRect.width * normX);
+                        const currentClientY = pageRect.top + (pageRect.height * normY);
+
+                        container.scrollLeft += (currentClientX - targetClientX);
+                        container.scrollTop += (currentClientY - targetClientY);
+                    }
+                }
+                pendingScrollRef.current = null;
+            } else {
+                // Zoom via toolbar buttons / keyboard (center zoom)
+                const ratio = scale / prevScale;
+                const contentCenterY = container.scrollTop + (containerRect.height / 2);
+                container.scrollTop = (contentCenterY * ratio) - (containerRect.height / 2);
+
+                if (container.scrollWidth > container.clientWidth) {
+                    const contentCenterX = container.scrollLeft + (containerRect.width / 2);
+                    container.scrollLeft = (contentCenterX * ratio) - (containerRect.width / 2);
+                }
+            }
+        }
+    }, [scale]);
+
     // Intercept pinch-to-zoom and keyboard zoom so it zooms the PDF, not the browser window
     useEffect(() => {
         const container = scrollContainerRef.current;
@@ -184,7 +225,30 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                setScale(s => Math.min(10, Math.max(0.1, s + delta)));
+                
+                setScale(s => {
+                    const newScale = Math.min(10, Math.max(0.1, s + delta));
+                    if (newScale !== s) {
+                        const pageEl = e.target.closest('.pdf-page-container');
+                        if (pageEl) {
+                            const pageRect = pageEl.getBoundingClientRect();
+                            const normX = (e.clientX - pageRect.left) / pageRect.width;
+                            const normY = (e.clientY - pageRect.top) / pageRect.height;
+                            
+                            pendingScrollRef.current = {
+                                pageIndex: pageEl.dataset.pageIndex,
+                                normX,
+                                normY,
+                                targetClientX: e.clientX,
+                                targetClientY: e.clientY
+                            };
+                        } else {
+                            pendingScrollRef.current = { isBackground: true };
+                        }
+                    }
+                    return newScale;
+                });
+                
                 setZoomMode('custom');
             }
         };
