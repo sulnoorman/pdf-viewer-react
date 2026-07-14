@@ -38,7 +38,12 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
     const [textStamps, setTextStamps] = useState([]);
-    const [activeStampId, setActiveStampId] = useState(null);
+    const [activeStampId, _setActiveStampId] = useState(null);
+    const activeStampIdRef = useRef(null);
+    const setActiveStampId = (id) => {
+        activeStampIdRef.current = id;
+        _setActiveStampId(id);
+    };
 
     // Settings
     const [isDrawMode, setIsDrawMode] = useState(false);
@@ -258,6 +263,18 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 } else if (e.key === '0') {
                     e.preventDefault();
                     setZoomMode('auto');
+                }
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                // If focus is inside a textarea or input, do not intercept
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                const currentId = activeStampIdRef.current;
+                if (currentId) {
+                    e.preventDefault();
+                    setStamps(prev => prev.filter(s => s.id !== currentId));
+                    setTextStamps(prev => prev.filter(s => s.id !== currentId));
+                    setActiveStampId(null);
                 }
             }
         };
