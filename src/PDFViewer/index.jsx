@@ -224,10 +224,15 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         const handleWheel = (e) => {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
-                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                let ticks = e.deltaY / 100; // Default: pixels (deltaMode 0)
+                if (e.deltaMode === 1) ticks = e.deltaY / 3; // Lines
+                else if (e.deltaMode === 2) ticks = e.deltaY; // Pages
+                
+                // 1.2 is the zoom multiplier per tick. Negative ticks mean zoom in.
+                const zoomFactor = Math.pow(1.2, -ticks);
                 
                 setScale(s => {
-                    const newScale = Math.min(10, Math.max(0.1, s + delta));
+                    const newScale = Math.min(10, Math.max(0.1, s * zoomFactor));
                     if (newScale !== s) {
                         const pageEl = e.target.closest('.pdf-page-container');
                         if (pageEl) {
@@ -257,8 +262,9 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
             if (e.ctrlKey || e.metaKey) {
                 if (e.key === '=' || e.key === '+' || e.key === '-') {
                     e.preventDefault();
-                    const delta = e.key === '-' ? -0.1 : 0.1;
-                    setScale(s => Math.min(10, Math.max(0.1, s + delta)));
+                    // Zoom by roughly 10% per keypress
+                    const zoomFactor = e.key === '-' ? 0.9 : 1.1;
+                    setScale(s => Math.min(10, Math.max(0.1, s * zoomFactor)));
                     setZoomMode('custom');
                 } else if (e.key === '0') {
                     e.preventDefault();
