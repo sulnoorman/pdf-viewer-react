@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Stamp } from './Stamp';
+import { TextStamp } from './TextStamp';
 import { InkLayer } from './InkLayer';
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }) => {
+export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, textStamps = [], setTextStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const annotationLayerRef = useRef(null);
@@ -154,9 +155,9 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     }, [pdfDoc, pageNumber, debouncedScale]);
 
     const pageStamps = stamps.filter(s => s.pageIndex === pageNumber - 1);
+    const pageTextStamps = textStamps.filter(s => s.pageIndex === pageNumber - 1);
 
     const updateStamp = (id, newData) => {
-        // Convert scaled DOM pixels back to unscaled (scale=1) PDF coordinates for state
         const unscaledData = {};
         if (newData.x !== undefined) unscaledData.x = newData.x / scale;
         if (newData.y !== undefined) unscaledData.y = newData.y / scale;
@@ -165,6 +166,20 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
         if (newData.pageIndex !== undefined) unscaledData.pageIndex = newData.pageIndex;
 
         setStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
+    };
+
+    const updateTextStamp = (id, newData) => {
+        const unscaledData = {};
+        // Scale positions and sizes back to PDF resolution
+        if (newData.x !== undefined) unscaledData.x = newData.x / scale;
+        if (newData.y !== undefined) unscaledData.y = newData.y / scale;
+        if (newData.width !== undefined) unscaledData.width = newData.width / scale;
+        if (newData.height !== undefined) unscaledData.height = newData.height / scale;
+        if (newData.pageIndex !== undefined) unscaledData.pageIndex = newData.pageIndex;
+        // Text specific fields are not scaled back
+        if (newData.text !== undefined) unscaledData.text = newData.text;
+
+        setTextStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
     };
 
     const cssScale = scale / canvasScale;
@@ -254,6 +269,25 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     isActive={activeStampId === stamp.id}
                     setActiveStampId={setActiveStampId}
                     updateStamp={updateStamp}
+                    onDeleteStamp={onDeleteStamp}
+                    scale={scale}
+                />
+            ))}
+
+            {pageTextStamps.map(stamp => (
+                <TextStamp
+                    key={stamp.id}
+                    stamp={{
+                        ...stamp,
+                        x: stamp.x * scale,
+                        y: stamp.y * scale,
+                        width: stamp.width * scale,
+                        height: stamp.height * scale,
+                        // Note: fontSize is handled directly in TextStamp based on scale prop
+                    }}
+                    isActive={activeStampId === stamp.id}
+                    setActiveStampId={setActiveStampId}
+                    updateTextStamp={updateTextStamp}
                     onDeleteStamp={onDeleteStamp}
                     scale={scale}
                 />

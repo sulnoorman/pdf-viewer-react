@@ -29,13 +29,15 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         onDownload,
         canDownload = true,
         allowMultipleStamps = true,
-        maxStamps = null
+        maxStamps = null,
+        customToolbarActions = []
     } = config || {};
 
     const [pdfDoc, setPdfDoc] = useState(null);
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
+    const [textStamps, setTextStamps] = useState([]);
     const [activeStampId, setActiveStampId] = useState(null);
 
     // Settings
@@ -269,6 +271,119 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         };
     }, [src]);
 
+    useImperativeHandle(ref, () => ({
+        addTextStamp: ({ text, fontSize = 16, color = '#000000', fontFamily = 'Helvetica' }) => {
+            let currentPageIndex = 0;
+            if (documentRef.current) {
+                currentPageIndex = documentRef.current.getActivePageIndex();
+            }
+
+            setTextStamps(prev => [
+                ...prev,
+                {
+                    id: `text-${Date.now()}`,
+                    pageIndex: currentPageIndex,
+                    x: 50,
+                    y: 50,
+                    width: 250,
+                    height: 50,
+                    text: text,
+                    fontSize: fontSize,
+                    color: color,
+                    fontFamily: fontFamily
+                }
+            ]);
+        },
+        getFlattenedPDF: async () => {
+            try {
+                const existingPdfBytes = await fetch(src).then(res => res.arrayBuffer());
+                const pdfDocLib = await PDFDocument.load(existingPdfBytes);
+                const pages = pdfDocLib.getPages();
+
+                // 1. Draw Stamps
+                if (stamps.length > 0 && specimenAsset) {
+                    const specimenBytes = await fetch(specimenAsset).then(res => res.arrayBuffer());
+                    const isPng = specimenAsset.toLowerCase().endsWith('.png');
+                    const image = isPng
+                        ? await pdfDocLib.embedPng(specimenBytes)
+                        : await pdfDocLib.embedJpg(specimenBytes);
+
+                    stamps.forEach(stamp => {
+                        const pageIndex = stamp.pageIndex || 0;
+                        if (pageIndex < 0 || pageIndex >= pages.length) return;
+
+                        const page = pages[pageIndex];
+                        const { height: pageHeight } = page.getSize();
+
+                        page.drawImage(image, {
+                            x: stamp.x,
+                            y: pageHeight - stamp.y - stamp.height,
+                            width: stamp.width,
+                            height: stamp.height,
+                        });
+                    });
+                }
+
+                // 2. Draw Ink Annotations (Coret-coret)
+                for (const [pageIndexStr, paths] of Object.entries(inkAnnotations)) {
+                    const pageIndex = parseInt(pageIndexStr, 10);
+                    if (pageIndex < 0 || pageIndex >= pages.length) continue;
+
+                    const page = pages[pageIndex];
+                    const { height: pageHeight } = page.getSize();
+
+                    for (const path of paths) {
+                        if (!path || path.points.length < 2) continue;
+
+                        const svgPath = `M ${path.points.map(p => `${p.x},${p.y}`).join(' L ')}`;
+                        page.drawSvgPath(svgPath, {
+                            x: 0,
+                            y: pageHeight, // anchors the top-left of SVG to the top-left of the PDF page
+                            borderColor: hexToRgb(path.color),
+                            borderWidth: path.strokeWidth,
+                            borderOpacity: path.opacity || 1,
+                        });
+                    }
+                }
+
+                // 3. Draw Text Stamps
+                if (textStamps.length > 0) {
+                    textStamps.forEach(stamp => {
+                        const pageIndex = stamp.pageIndex || 0;
+                        if (pageIndex < 0 || pageIndex >= pages.length) return;
+
+                        const page = pages[pageIndex];
+                        const { height: pageHeight } = page.getSize();
+
+                        // We map the color string to pdf-lib rgb
+                        page.drawText(stamp.text, {
+                            x: stamp.x,
+                            // SVG/DOM y is from top, PDF y is from bottom.
+                            // In HTML, y=0 is top. In PDF, y=pageHeight is top.
+                            // We must subtract the text height to align perfectly.
+                            y: pageHeight - stamp.y - (stamp.fontSize || 14),
+                            size: stamp.fontSize || 14,
+                            color: hexToRgb(stamp.color || '#000000'),
+                            lineHeight: (stamp.fontSize || 14) * 1.2
+                        });
+                    });
+                }
+
+                const pdfBytes = await pdfDocLib.save();
+                return new Blob([pdfBytes], { type: 'application/pdf' });
+            } catch (error) {
+                console.error("Error flattening PDF:", error);
+                throw error;
+            }
+        }
+    }));
+
+    const handleDeleteStamp = (id) => {
+        setStamps(prev => prev.filter(s => s.id !== id));
+        setTextStamps(prev => prev.filter(s => s.id !== id));
+        setActiveStampId(null);
+    };
+
     return (
         <div className="flex flex-col w-full h-full bg-[#2a2a2e] overflow-hidden font-sans">
             <Toolbar
@@ -294,13 +409,23 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 undoInk={undoInk}
                 canRedoInk={canRedoInk}
                 redoInk={redoInk}
+                customToolbarActions={customToolbarActions}
             />
             <Document
                 ref={documentRef}
+<<<<<<< HEAD
                 pdfDoc={pdfDoc}
                 scale={scale}
                 stamps={stamps}
                 setStamps={setStamps}
+=======
+                pdfDoc={pdfDoc}
+                scale={scale}
+                stamps={stamps}
+                setStamps={setStamps}
+                textStamps={textStamps}
+                setTextStamps={setTextStamps}
+>>>>>>> react-pdf-viewer-stamping
                 inkAnnotations={inkAnnotations}
                 setInkAnnotations={handleSetInkAnnotations}
                 isDrawMode={isDrawMode}
