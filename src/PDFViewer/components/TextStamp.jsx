@@ -77,7 +77,7 @@ export const TextStamp = ({ stamp, isActive, setActiveStampId, updateTextStamp, 
                         type="number" 
                         value={stamp.fontSize || 14}
                         onChange={(e) => updateTextStamp(stamp.id, { fontSize: parseInt(e.target.value, 10) || 14 })}
-                        className="w-12 h-6 px-1 text-xs text-black bg-gray-100 border-none outline-none rounded"
+                        className="w-7 h-6 px-1 text-xs text-white bg-gray-700 border-none outline-none rounded"
                         title="Ukuran Font"
                         min="8"
                         max="72"
