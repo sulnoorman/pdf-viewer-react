@@ -148,10 +148,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         ]);
     };
 
-    const handleDeleteStamp = (id) => {
-        setStamps(prev => prev.filter(s => s.id !== id));
-        setActiveStampId(null);
-    };
+
 
     useImperativeHandle(ref, () => ({
         getFlattenedPDF: async () => {
@@ -413,19 +410,12 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
             />
             <Document
                 ref={documentRef}
-<<<<<<< HEAD
-                pdfDoc={pdfDoc}
-                scale={scale}
-                stamps={stamps}
-                setStamps={setStamps}
-=======
                 pdfDoc={pdfDoc}
                 scale={scale}
                 stamps={stamps}
                 setStamps={setStamps}
                 textStamps={textStamps}
                 setTextStamps={setTextStamps}
->>>>>>> react-pdf-viewer-stamping
                 inkAnnotations={inkAnnotations}
                 setInkAnnotations={handleSetInkAnnotations}
                 isDrawMode={isDrawMode}
