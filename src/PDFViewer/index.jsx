@@ -36,9 +36,47 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
-    const [inkAnnotations, setInkAnnotations] = useState({});
-    const [isDrawMode, setIsDrawMode] = useState(false);
     const [activeStampId, setActiveStampId] = useState(null);
+    
+    // Settings
+    const [isDrawMode, setIsDrawMode] = useState(false);
+    const [inkColor, setInkColor] = useState('#000000');
+    const [inkThickness, setInkThickness] = useState(2);
+    const [inkOpacity, setInkOpacity] = useState(1);
+    
+    // Undo/Redo History for Ink
+    const [inkHistory, setInkHistory] = useState([{}]);
+    const [historyIndex, setHistoryIndex] = useState(0);
+    
+    const inkAnnotations = inkHistory[historyIndex];
+    
+    const handleSetInkAnnotations = (updater) => {
+        setInkHistory(prevHistory => {
+            // Using a functional state update inside another state update needs careful closure handling.
+            // Actually, we can just compute the new state here since we have prevHistory.
+            const current = prevHistory[historyIndex];
+            let next;
+            if (typeof updater === 'function') {
+                next = updater(current);
+            } else {
+                next = updater;
+            }
+            
+            const newHistory = prevHistory.slice(0, historyIndex + 1);
+            newHistory.push(next);
+            if (newHistory.length > 50) newHistory.shift();
+            
+            setHistoryIndex(newHistory.length - 1);
+            return newHistory;
+        });
+    };
+    
+    const canUndoInk = historyIndex > 0;
+    const canRedoInk = historyIndex < inkHistory.length - 1;
+    
+    const undoInk = () => { if (canUndoInk) setHistoryIndex(historyIndex - 1); };
+    const redoInk = () => { if (canRedoInk) setHistoryIndex(historyIndex + 1); };
+
     const scrollContainerRef = useRef(null);
     const documentRef = useRef(null);
 
@@ -212,6 +250,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                             y: pageHeight, // anchors the top-left of SVG to the top-left of the PDF page
                             borderColor: hexToRgb(path.color),
                             borderWidth: path.strokeWidth,
+                            borderOpacity: path.opacity || 1,
                         });
                     }
                 }
@@ -245,6 +284,16 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 canDownload={canDownload} 
                 isDrawMode={isDrawMode}
                 setIsDrawMode={setIsDrawMode}
+                inkColor={inkColor}
+                setInkColor={setInkColor}
+                inkThickness={inkThickness}
+                setInkThickness={setInkThickness}
+                inkOpacity={inkOpacity}
+                setInkOpacity={setInkOpacity}
+                canUndoInk={canUndoInk}
+                undoInk={undoInk}
+                canRedoInk={canRedoInk}
+                redoInk={redoInk}
             />
             <Document 
                 ref={documentRef}
@@ -253,8 +302,11 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
                 stamps={stamps} 
                 setStamps={setStamps} 
                 inkAnnotations={inkAnnotations}
-                setInkAnnotations={setInkAnnotations}
+                setInkAnnotations={handleSetInkAnnotations}
                 isDrawMode={isDrawMode}
+                inkColor={inkColor}
+                inkThickness={inkThickness}
+                inkOpacity={inkOpacity}
                 specimenAsset={specimenAsset} 
                 scrollContainerRef={scrollContainerRef}
                 activeStampId={activeStampId}
