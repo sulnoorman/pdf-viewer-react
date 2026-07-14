@@ -111,8 +111,8 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
             const baseViewport = firstPage.getViewport({ scale: 1 });
             const pageHeight = baseViewport.height * scale;
             
-            // mb-6 is 1.5rem (24px) in Tailwind
-            currentPageIndex = Math.floor(scrollTop / (pageHeight + 24));
+            // py-8 is 2rem (32px) padding. mb-2 is 0.5rem (8px) gap between pages.
+            currentPageIndex = Math.floor((scrollTop - 32) / (pageHeight + 8));
 
             if (currentPageIndex < 0) currentPageIndex = 0;
             if (currentPageIndex > pdfDoc.numPages - 1) currentPageIndex = pdfDoc.numPages - 1;
