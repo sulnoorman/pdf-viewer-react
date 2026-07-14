@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { PDFViewer } from './PDFViewer';
-import { IconFileText } from '@tabler/icons-react';
+import IconFileText from '@tabler/icons-react/dist/esm/icons/IconFileText.mjs';
 import './App.css';
 
 export default function App() {
@@ -24,7 +24,7 @@ export default function App() {
   };
 
   return (
-    <div className="w-screen h-screen overflow-hidden flex flex-col bg-gray-200">
+    <div className="w-screen h-screen bg-gray-100 flex items-center justify-center">
       <PDFViewer
         ref={stamperRef}
         src="/signed-document.pdf"
@@ -32,7 +32,7 @@ export default function App() {
           specimenAsset: '/Tandatangan.png',
           onSpecimenChange: (isPlaced) => setHasSpecimen(isPlaced),
           onDownload: handleDownload,
-          canDownload: hasSpecimen,
+          canDownload: true,
           allowMultipleStamps: true,
           maxStamps: 5,
           customToolbarActions: [
