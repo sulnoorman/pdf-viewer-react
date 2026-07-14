@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { PDFViewer } from './PDFViewer';
-import { IconFileText } from '@tabler/icons-react';
+import { FileText } from 'lucide-react';
 import './App.css';
 
 export default function App() {
@@ -39,7 +39,7 @@ export default function App() {
             {
               id: 'btn-add-number',
               label: 'Ambil Nomor',
-              icon: <IconFileText size={14} stroke={2} />,
+              icon: <FileText size={14} strokeWidth={2} />,
               onClick: () => {
                 // Simulate fetching a number from API
                 const fakeNumber = "123/IT-DEV/VIII/2026";
