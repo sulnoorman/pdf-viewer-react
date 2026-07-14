@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Stamp } from './Stamp';
+import { InkLayer } from './InkLayer';
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp }) => {
+export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const annotationLayerRef = useRef(null);
@@ -225,6 +226,15 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                         '--scale-factor': canvasScale,
                         '--total-scale-factor': canvasScale
                     }}
+                />
+                
+                <InkLayer 
+                    width={dimensions.width}
+                    height={dimensions.height}
+                    scale={scale}
+                    isDrawMode={isDrawMode}
+                    inkAnnotations={inkAnnotations}
+                    setInkAnnotations={setInkAnnotations}
                 />
             </div>
 
