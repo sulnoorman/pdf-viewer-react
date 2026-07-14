@@ -219,7 +219,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         const updateScale = async () => {
             const newScale = await calculateScaleForMode(zoomMode);
             if (newScale) {
-                setScale(Math.max(0.1, Math.min(newScale, 5)));
+                setScale(Math.max(0.1, Math.min(newScale, 10)));
             }
         };
 
@@ -234,22 +234,41 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         if (onSpecimenChange) onSpecimenChange(stamps.length > 0);
     }, [stamps, onSpecimenChange]);
 
-    // Intercept pinch-to-zoom so it zooms the PDF, not the browser window
+    // Intercept pinch-to-zoom and keyboard zoom so it zooms the PDF, not the browser window
     useEffect(() => {
         const container = scrollContainerRef.current;
         if (!container) return;
 
         const handleWheel = (e) => {
-            if (e.ctrlKey) {
+            if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? -0.1 : 0.1;
-                setScale(s => Math.min(5, Math.max(0.1, s + delta)));
+                setScale(s => Math.min(10, Math.max(0.1, s + delta)));
                 setZoomMode('custom');
             }
         };
 
+        const handleKeyDown = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === '=' || e.key === '+' || e.key === '-') {
+                    e.preventDefault();
+                    const delta = e.key === '-' ? -0.1 : 0.1;
+                    setScale(s => Math.min(10, Math.max(0.1, s + delta)));
+                    setZoomMode('custom');
+                } else if (e.key === '0') {
+                    e.preventDefault();
+                    setZoomMode('auto');
+                }
+            }
+        };
+
         container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => container.removeEventListener('wheel', handleWheel);
+        window.addEventListener('keydown', handleKeyDown, { passive: false });
+        
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+            window.removeEventListener('keydown', handleKeyDown);
+        };
     }, []);
 
     useEffect(() => {
