@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 
-export const flattenPDFWithStamps = async (src, specimenAsset, stamps, scale) => {
+export const flattenPDFWithStamps = async (src, specimenAsset, stamps) => {
     if (stamps.length === 0) throw new Error("No specimen placed!");
 
     const existingPdfBytes = await fetch(src).then(res => res.arrayBuffer());
