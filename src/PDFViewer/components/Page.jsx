@@ -158,7 +158,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, textStamps 
     const pageTextStamps = textStamps.filter(s => s.pageIndex === pageNumber - 1);
 
     const updateStamp = (id, newData) => {
-        const unscaledData = {};
+        const unscaledData = { ...newData };
         if (newData.x !== undefined) unscaledData.x = newData.x / scale;
         if (newData.y !== undefined) unscaledData.y = newData.y / scale;
         if (newData.width !== undefined) unscaledData.width = newData.width / scale;
@@ -169,15 +169,12 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, textStamps 
     };
 
     const updateTextStamp = (id, newData) => {
-        const unscaledData = {};
+        const unscaledData = { ...newData };
         // Scale positions and sizes back to PDF resolution
         if (newData.x !== undefined) unscaledData.x = newData.x / scale;
         if (newData.y !== undefined) unscaledData.y = newData.y / scale;
         if (newData.width !== undefined) unscaledData.width = newData.width / scale;
         if (newData.height !== undefined) unscaledData.height = newData.height / scale;
-        if (newData.pageIndex !== undefined) unscaledData.pageIndex = newData.pageIndex;
-        // Text specific fields are not scaled back
-        if (newData.text !== undefined) unscaledData.text = newData.text;
 
         setTextStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
     };
