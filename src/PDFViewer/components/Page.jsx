@@ -184,7 +184,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, textStamps 
     return (
         <div 
             ref={containerRef}
-            className="pdf-page-container relative shrink-0 shadow-sm bg-white origin-top border border-gray-400" 
+            className="pdf-page-container relative shrink-0 shadow-sm bg-white origin-top border border-gray-400 mx-auto" 
             data-page-index={pageNumber - 1}
             style={{ 
                 width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',

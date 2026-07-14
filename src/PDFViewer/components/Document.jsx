@@ -42,7 +42,7 @@ export const Document = forwardRef(({ pdfDoc, scale, stamps, setStamps, textStam
     return (
         <div 
             ref={scrollContainerRef} 
-            className="flex-1 overflow-auto py-8 flex flex-col items-center relative gap-sm"
+            className="flex-1 overflow-auto py-8 flex flex-col relative gap-sm"
             onMouseDown={() => setActiveStampId(null)}
         >
             {pdfDoc && Array.from({ length: pdfDoc.numPages }).map((_, i) => (
