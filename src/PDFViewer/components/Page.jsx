@@ -3,7 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { Stamp } from './Stamp';
 import { InkLayer } from './InkLayer';
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode }) => {
+export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const annotationLayerRef = useRef(null);
@@ -234,6 +234,9 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     isDrawMode={isDrawMode}
                     inkAnnotations={inkAnnotations}
                     setInkAnnotations={setInkAnnotations}
+                    inkColor={inkColor}
+                    inkThickness={inkThickness}
+                    inkOpacity={inkOpacity}
                 />
             </div>
 
