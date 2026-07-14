@@ -52,7 +52,7 @@ export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, update
             lockAspectRatio={true}
             className={`transition-colors cursor-move group ${
                 isActive
-                    ? 'border-2 border-blue-500 bg-blue-500/10 z-50'
+                    ? 'border-2 border-blue-500 bg-blue-500/5 z-50'
                     : 'border-2 border-transparent hover:border-blue-500 hover:bg-blue-500/10 z-10'
             }`}
         >
@@ -68,7 +68,7 @@ export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, update
                             e.stopPropagation();
                             onDeleteStamp(stamp.id);
                         }}
-                        className="p-1.5 hover:bg-red-500 rounded-md transition-colors"
+                        className="p-1.5 hover:bg-gray-500 rounded-md transition-colors"
                         title="Hapus Spesimen"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

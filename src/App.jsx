@@ -25,7 +25,7 @@ export default function App() {
     <div className="w-screen h-screen overflow-hidden flex flex-col bg-gray-200">
       <PDFViewer
         ref={stamperRef}
-        src="/guide-qa.pdf"
+        src="/signed-document.pdf"
         config={{
           specimenAsset: "/Tandatangan.png",
           onSpecimenChange: (isPlaced) => setHasSpecimen(isPlaced),
