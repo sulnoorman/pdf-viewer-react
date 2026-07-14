@@ -130,7 +130,7 @@ export const PDFViewer = forwardRef(({ src, config }, ref) => {
         if (!allowMultipleStamps && stamps.length >= 1) return;
         if (allowMultipleStamps && maxStamps !== null && stamps.length >= maxStamps) return;
 
-        const container = scrollContainerRef.current;
+        // const container = scrollContainerRef.current;
         let currentPageIndex = 0;
         if (documentRef.current) {
             currentPageIndex = documentRef.current.getActivePageIndex();
