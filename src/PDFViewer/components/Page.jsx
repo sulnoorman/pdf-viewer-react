@@ -6,7 +6,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const containerRef = useRef(null);
-    const [baseDimensions, setBaseDimensions] = useState(null);
+    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
     const [activeStampId, setActiveStampId] = useState(null);
     
     // Smooth zoom state
@@ -22,17 +22,17 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
         return () => clearTimeout(timer);
     }, [scale, debouncedScale]);
 
-    // Pre-fetch base dimensions to prevent layout shifts on multi-page docs
+    // Pre-fetch dimensions to prevent layout shifts on multi-page docs
     useEffect(() => {
         if (!pdfDoc) return;
         let isMounted = true;
         pdfDoc.getPage(pageNumber).then(page => {
             if (!isMounted) return;
-            const viewport = page.getViewport({ scale: 1 });
-            setBaseDimensions({ width: viewport.width, height: viewport.height });
+            const viewport = page.getViewport({ scale: debouncedScale });
+            setDimensions(prev => prev.width === 0 ? { width: viewport.width, height: viewport.height } : prev);
         });
         return () => isMounted = false;
-    }, [pdfDoc, pageNumber]);
+    }, [pdfDoc, pageNumber, debouncedScale]);
 
     useEffect(() => {
         let activeRenderTask = null;
@@ -79,6 +79,10 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     ctx.drawImage(renderCanvas, 0, 0);
 
                     // Sync the component's visual state to match the new HD canvas exactly when it appears
+                    setDimensions({
+                        width: viewport.width,
+                        height: viewport.height
+                    });
                     setCanvasScale(debouncedScale);
                 }
 
@@ -125,18 +129,13 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
 
     const cssScale = scale / canvasScale;
 
-    // Use baseDimensions multiplied by scale for visual size.
-    // If baseDimensions isn't loaded yet, default to a sensible height to prevent completely collapsed pages.
-    const currentWidth = baseDimensions ? baseDimensions.width * canvasScale : 0;
-    const currentHeight = baseDimensions ? baseDimensions.height * canvasScale : 800;
-
     return (
         <div 
             ref={containerRef}
             className="relative shadow-sm bg-white origin-top border border-gray-400" 
             style={{ 
-                width: currentWidth > 0 ? currentWidth * cssScale : 'auto',
-                height: currentHeight > 0 ? currentHeight * cssScale : 'auto',
+                width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',
+                height: dimensions.height > 0 ? dimensions.height * cssScale : 'auto',
                 marginBottom: 24 * scale, // Scale the gap so pages never look glued together
             }}
             onMouseDown={(e) => {
@@ -149,8 +148,8 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                 style={{
                     transform: `scale(${cssScale})`,
                     transformOrigin: 'top left',
-                    width: currentWidth,
-                    height: currentHeight,
+                    width: dimensions.width,
+                    height: dimensions.height,
                     position: 'absolute',
                     left: 0,
                     top: 0
