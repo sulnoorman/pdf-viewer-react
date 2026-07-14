@@ -69,18 +69,45 @@ export const TextStamp = ({ stamp, isActive, setActiveStampId, updateTextStamp, 
             
             {isActive && (
                 <div 
-                    className="absolute top-full right-0 mt-2 bg-gray-800 text-white rounded-md shadow-lg flex items-center p-1 cursor-default"
+                    className="absolute top-full right-0 mt-2 bg-gray-800 text-white rounded-md shadow-lg flex items-center gap-1 p-1 cursor-default pointer-events-auto"
                     onMouseDown={(e) => e.stopPropagation()}
                 >
+                    {/* Font Size Input */}
+                    <input 
+                        type="number" 
+                        value={stamp.fontSize || 14}
+                        onChange={(e) => updateTextStamp(stamp.id, { fontSize: parseInt(e.target.value, 10) || 14 })}
+                        className="w-12 h-6 px-1 text-xs text-black bg-gray-100 border-none outline-none rounded"
+                        title="Ukuran Font"
+                        min="8"
+                        max="72"
+                    />
+
+                    {/* Divider */}
+                    <div className="w-px h-4 bg-gray-600 mx-0.5"></div>
+
+                    {/* Color Picker (Masked as Circle) */}
+                    <div className="relative w-5 h-5 rounded-full overflow-hidden ring-1 ring-gray-600 hover:ring-gray-400 cursor-pointer shrink-0" title="Warna Font">
+                        <input 
+                            type="color" 
+                            value={stamp.color || '#000000'}
+                            onChange={(e) => updateTextStamp(stamp.id, { color: e.target.value })}
+                            className="absolute top-[-10px] left-[-10px] w-10 h-10 cursor-pointer"
+                        />
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-px h-4 bg-gray-600 mx-0.5"></div>
+
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();
                             onDeleteStamp(stamp.id);
                         }}
-                        className="p-1.5 hover:bg-gray-500 rounded-md transition-colors"
+                        className="p-1 hover:bg-gray-600 rounded transition-colors"
                         title="Hapus Teks"
                     >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                     </button>
