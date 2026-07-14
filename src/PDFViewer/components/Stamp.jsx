@@ -1,6 +1,6 @@
 import { Rnd } from 'react-rnd';
 
-export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, updateStamp, onDeleteStamp, scale }) => {
+export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, updateStamp, onDeleteStamp }) => {
     return (
         <Rnd
             size={{ width: stamp.width, height: stamp.height }}
