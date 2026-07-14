@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { PDFStamper } from './components';
+import { PDFViewer } from './PDFViewer';
 
 export default function App() {
   const stamperRef = useRef(null);
@@ -27,7 +27,7 @@ export default function App() {
         This wrapper mimics an iframe container in a real app.
         The PDFStamper is designed to fill its parent container entirely (w-full h-full).
       */}
-      <PDFStamper
+      <PDFViewer
         ref={stamperRef}
         src="/sample.pdf"
         specimenAsset="/Tandatangan.png"
