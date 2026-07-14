@@ -12,23 +12,33 @@ export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, update
             }}
             onDragStop={(e, d) => {
                 const stampRect = d.node.getBoundingClientRect();
-                const centerX = stampRect.left + stampRect.width / 2;
-                const centerY = stampRect.top + stampRect.height / 2;
-                
-                const elements = document.elementsFromPoint(centerX, centerY);
-                const pageElement = elements.find(el => el.classList.contains('pdf-page-container'));
-                
-                if (pageElement) {
-                    const pageIndex = parseInt(pageElement.dataset.pageIndex, 10);
-                    const pageRect = pageElement.getBoundingClientRect();
+                const pages = Array.from(document.querySelectorAll('.pdf-page-container'));
+                let maxArea = 0;
+                let bestPage = null;
+
+                for (const page of pages) {
+                    const pageRect = page.getBoundingClientRect();
+                    const overlapX = Math.max(0, Math.min(stampRect.right, pageRect.right) - Math.max(stampRect.left, pageRect.left));
+                    const overlapY = Math.max(0, Math.min(stampRect.bottom, pageRect.bottom) - Math.max(stampRect.top, pageRect.top));
+                    const area = overlapX * overlapY;
+                    if (area > maxArea) {
+                        maxArea = area;
+                        bestPage = page;
+                    }
+                }
+
+                if (bestPage) {
+                    const pageIndex = parseInt(bestPage.dataset.pageIndex, 10);
+                    const pageRect = bestPage.getBoundingClientRect();
                     
-                    const newX = (stampRect.left - pageRect.left) / scale; 
-                    const newY = (stampRect.top - pageRect.top) / scale;
+                    // Do NOT divide by scale here; updateStamp expects screen pixels and scales them internally
+                    const newX = stampRect.left - pageRect.left; 
+                    const newY = stampRect.top - pageRect.top;
                     
                     updateStamp(stamp.id, { x: newX, y: newY, pageIndex });
                 } else {
-                    // Fallback if dragged outside bounds
-                    updateStamp(stamp.id, { x: d.x, y: d.y });
+                    // Fallback if dragged completely outside all pages
+                    updateStamp(stamp.id, { x: Math.max(0, d.x), y: Math.max(0, d.y) });
                 }
             }}
             onResizeStart={() => setActiveStampId(stamp.id)}
@@ -46,18 +56,27 @@ export const Stamp = ({ stamp, specimenAsset, isActive, setActiveStampId, update
                     : 'border-2 border-transparent hover:border-blue-500 hover:bg-blue-500/10 z-10'
             }`}
         >
-            {isActive && (
-                <button 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteStamp(stamp.id);
-                    }}
-                    className="absolute -top-3 -right-3 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 shadow-md"
-                >
-                    ✕
-                </button>
-            )}
             <img src={specimenAsset} className="w-full h-full object-contain pointer-events-none" alt="specimen" />
+            
+            {isActive && (
+                <div 
+                    className="absolute top-full right-0 mt-2 bg-gray-800 text-white rounded-md shadow-lg flex items-center p-1 cursor-default"
+                    onMouseDown={(e) => e.stopPropagation()}
+                >
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteStamp(stamp.id);
+                        }}
+                        className="p-1.5 hover:bg-red-500 rounded-md transition-colors"
+                        title="Hapus Spesimen"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            )}
         </Rnd>
     );
 };
