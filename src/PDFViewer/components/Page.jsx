@@ -10,15 +10,17 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     const [activeStampId, setActiveStampId] = useState(null);
     
     // Smooth zoom state
-    const [renderedScale, setRenderedScale] = useState(scale);
+    const [debouncedScale, setDebouncedScale] = useState(scale);
+    // Tracks the actual resolution of the canvas currently on screen
+    const [canvasScale, setCanvasScale] = useState(scale);
 
     useEffect(() => {
-        if (scale === renderedScale) return;
+        if (scale === debouncedScale) return;
         const timer = setTimeout(() => {
-            setRenderedScale(scale);
+            setDebouncedScale(scale);
         }, 300);
         return () => clearTimeout(timer);
-    }, [scale, renderedScale]);
+    }, [scale, debouncedScale]);
 
     useEffect(() => {
         let activeRenderTask = null;
@@ -28,12 +30,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
             
             // Get the unscaled viewport to determine base aspect ratio, considering page rotation
             const page = await pdfDoc.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: renderedScale });
-            
-            setDimensions({
-                width: viewport.width,
-                height: viewport.height
-            });
+            const viewport = page.getViewport({ scale: debouncedScale });
 
             const outputScale = window.devicePixelRatio || 1;
             const targetWidth = Math.floor(viewport.width * outputScale);
@@ -68,6 +65,13 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     
                     const ctx = canvas.getContext('2d', { alpha: false });
                     ctx.drawImage(renderCanvas, 0, 0);
+
+                    // Sync the component's visual state to match the new HD canvas exactly when it appears
+                    setDimensions({
+                        width: viewport.width,
+                        height: viewport.height
+                    });
+                    setCanvasScale(debouncedScale);
                 }
 
                 // Render Text Layer
@@ -96,7 +100,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                 activeRenderTask.cancel();
             }
         };
-    }, [pdfDoc, pageNumber, renderedScale]);
+    }, [pdfDoc, pageNumber, debouncedScale]);
 
     const pageStamps = stamps.filter(s => s.pageIndex === pageNumber - 1);
 
@@ -111,7 +115,7 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
         setStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
     };
 
-    const cssScale = scale / renderedScale;
+    const cssScale = scale / canvasScale;
 
     return (
         <div 
@@ -151,8 +155,8 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                         overflow: 'hidden',
                         lineHeight: 1.0,
                         opacity: 1, // Let users see selection highlights
-                        '--scale-factor': 1,
-                        '--total-scale-factor': 1
+                        '--scale-factor': canvasScale,
+                        '--total-scale-factor': canvasScale
                     }}
                 />
             </div>
