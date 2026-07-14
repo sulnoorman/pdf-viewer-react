@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Stamp } from './Stamp';
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId }) => {
+export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp }) => {
     const canvasRef = useRef(null);
     const textLayerRef = useRef(null);
     const containerRef = useRef(null);
@@ -131,7 +131,8 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
     return (
         <div 
             ref={containerRef}
-            className="relative shrink-0 shadow-sm bg-white origin-top border border-gray-400" 
+            className="pdf-page-container relative shrink-0 shadow-sm bg-white origin-top border border-gray-400" 
+            data-page-index={pageNumber - 1}
             style={{ 
                 width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',
                 height: dimensions.height > 0 ? dimensions.height * cssScale : 'auto',
@@ -187,6 +188,8 @@ export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, specimenAss
                     isActive={activeStampId === stamp.id}
                     setActiveStampId={setActiveStampId}
                     updateStamp={updateStamp}
+                    onDeleteStamp={onDeleteStamp}
+                    scale={scale}
                 />
             ))}
         </div>

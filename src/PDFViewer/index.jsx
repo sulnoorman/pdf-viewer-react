@@ -10,13 +10,23 @@ import { flattenPDFWithStamps } from '../utils/pdfUtils';
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
 
-export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onDownload, canDownload }, ref) => {
+export const PDFViewer = forwardRef(({ src, config }, ref) => {
+    const {
+        specimenAsset,
+        onSpecimenChange,
+        onDownload,
+        canDownload = true,
+        allowMultipleStamps = true,
+        maxStamps = null
+    } = config || {};
+    
     const [pdfDoc, setPdfDoc] = useState(null);
     const [scale, setScale] = useState(1.0);
     const [zoomMode, setZoomMode] = useState('auto'); // 'auto', 'page-fit', 'page-width', 'actual-size', 'custom'
     const [stamps, setStamps] = useState([]);
     const [activeStampId, setActiveStampId] = useState(null);
     const scrollContainerRef = useRef(null);
+    const documentRef = useRef(null);
 
     useEffect(() => {
         if (!src) return;
@@ -103,20 +113,13 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
     const handleAddSpecimen = async () => {
         if (!pdfDoc) return;
 
+        if (!allowMultipleStamps && stamps.length >= 1) return;
+        if (allowMultipleStamps && maxStamps !== null && stamps.length >= maxStamps) return;
+
         const container = scrollContainerRef.current;
         let currentPageIndex = 0;
-
-        if (container) {
-            const scrollTop = container.scrollTop;
-            const firstPage = await pdfDoc.getPage(1);
-            const baseViewport = firstPage.getViewport({ scale: 1 });
-            const pageHeight = baseViewport.height * scale;
-            
-            // py-8 is 32px top padding. Margin is 24 * scale.
-            currentPageIndex = Math.floor((scrollTop - 32) / (pageHeight + (24 * scale)));
-
-            if (currentPageIndex < 0) currentPageIndex = 0;
-            if (currentPageIndex > pdfDoc.numPages - 1) currentPageIndex = pdfDoc.numPages - 1;
+        if (documentRef.current) {
+            currentPageIndex = documentRef.current.getActivePageIndex();
         }
 
         // Calculate aspect ratio dynamically so the stamp is never stretched
@@ -151,6 +154,11 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
         getFlattenedPDF: () => flattenPDFWithStamps(src, specimenAsset, stamps, scale)
     }));
 
+    const handleDeleteStamp = (id) => {
+        setStamps(prev => prev.filter(s => s.id !== id));
+        setActiveStampId(null);
+    };
+
     return (
         <div className="flex flex-col w-full h-full bg-[#525659] overflow-hidden font-sans">
             <Toolbar 
@@ -166,6 +174,7 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
                 canDownload={canDownload} 
             />
             <Document 
+                ref={documentRef}
                 pdfDoc={pdfDoc} 
                 scale={scale} 
                 stamps={stamps} 
@@ -174,6 +183,7 @@ export const PDFViewer = forwardRef(({ src, specimenAsset, onSpecimenChange, onD
                 scrollContainerRef={scrollContainerRef}
                 activeStampId={activeStampId}
                 setActiveStampId={setActiveStampId}
+                onDeleteStamp={handleDeleteStamp}
             />
         </div>
     );
