@@ -3,6 +3,7 @@ import { useState } from 'react';
 export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, onDownload, canDownload, isDrawMode, setIsDrawMode, inkColor, setInkColor, inkThickness, setInkThickness, inkOpacity, setInkOpacity, canUndoInk, undoInk, canRedoInk, redoInk }) => {
     const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4];
     const isCustomScale = zoomMode === 'custom' && !presetScales.includes(scale);
+
     const [showDrawSettings, setShowDrawSettings] = useState(false);
 
     return (
@@ -33,7 +34,7 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
                                 setScale(parseFloat(val));
                             }
                         }}
-                        className="w-[120px] bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-1 pl-2 pr-4 appearance-none cursor-pointer hover:bg-[#525659] transition-colors"
+                        className="w-30 bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-1 pl-2 pr-4 appearance-none cursor-pointer hover:bg-[#525659] transition-colors"
                     >
                         <option value="auto">Automatic Zoom</option>
                         <option value="actual-size">Actual Size</option>
@@ -98,11 +99,10 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
                     <button
                         type='button'
                         onClick={() => setIsDrawMode(!isDrawMode)}
-                        className={`px-3 py-1.5 border border-r-0 text-xs font-medium rounded-l transition-colors flex items-center gap-2 cursor-pointer ${
-                            isDrawMode 
-                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700' 
+                        className={`px-3 py-1.5 border border-r-0 text-xs font-medium rounded-l transition-colors flex items-center gap-2 cursor-pointer ${isDrawMode
+                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700'
                                 : 'bg-[#424649] border-[#525659] text-gray-200 hover:bg-[#525659] hover:text-white'
-                        }`}
+                            }`}
                     >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -112,11 +112,10 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
                     <button
                         type='button'
                         onClick={() => setShowDrawSettings(!showDrawSettings)}
-                        className={`px-2 py-1.5 border text-xs font-medium rounded-r transition-colors flex items-center cursor-pointer ${
-                            isDrawMode 
-                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700' 
+                        className={`px-2 py-1.5 border text-xs font-medium rounded-r transition-colors flex items-center cursor-pointer ${isDrawMode
+                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700'
                                 : 'bg-[#424649] border-[#525659] text-gray-200 hover:bg-[#525659] hover:text-white'
-                        }`}
+                            }`}
                     >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -144,7 +143,7 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
                                     <span>Opacity</span>
                                     <span>{Math.round(inkOpacity * 100)}%</span>
                                 </label>
-                                <input type="range" min="10" max="100" value={inkOpacity * 100} onChange={e => setInkOpacity(parseInt(e.target.value)/100)} className="w-full accent-blue-500" />
+                                <input type="range" min="10" max="100" value={inkOpacity * 100} onChange={e => setInkOpacity(parseInt(e.target.value) / 100)} className="w-full accent-blue-500" />
                             </div>
                         </div>
                     )}
@@ -169,8 +168,8 @@ export const Toolbar = ({ scale, setScale, zoomMode, setZoomMode, onAddStamp, on
                         className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${canDownload ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer' : 'bg-[#424649] text-gray-500 cursor-not-allowed'}`}
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z" />
                         </svg>
                         Download
                     </button>
