@@ -1,0 +1,133 @@
+import { Meta } from '@storybook/addon-docs/blocks'
+
+<Meta title="Getting Started" />
+
+# react-pdf-viewer-stamping
+
+A React PDF viewer with stamping and freehand annotation built in — pdf.js rendering and
+pdf-lib export behind a single component.
+
+Instead of assembling pdf.js, pdf-lib and a drag/resize library yourself and then owning
+the coordinate maths between them, you render one component and call one method to get a
+flattened PDF back.
+
+Every page in this Storybook is live. Change the controls, drag things around, export a
+document — it is the real component, not a screenshot.
+
+<div style={{
+  padding: '12px 16px',
+  background: '#fffbeb',
+  border: '1px solid #fcd34d',
+  borderRadius: 6,
+  margin: '16px 0',
+}}>
+  <strong>0.1.0 — early release.</strong> The API is settling while it gets used in real
+  applications. Breaking changes will land as minor bumps until 1.0.
+</div>
+
+## Install
+
+```bash
+npm install react-pdf-viewer-stamping pdfjs-dist
+```
+
+**Peer dependencies:** React 18 or 19, and `pdfjs-dist` v6. Modern package managers
+install peers automatically, but declaring `pdfjs-dist` is worth doing because your own
+code imports the worker from it.
+
+It is a peer rather than a bundled dependency on purpose: two copies in one application
+means two 1.2 MB workers, and pdf.js refuses to run when the worker and the API come
+from different versions.
+
+The package is **ESM only** — there is no CommonJS build, because there could not be a
+working one: pdfjs-dist v6 is itself ESM-only.
+
+## The smallest working example
+
+```jsx
+import { useRef, useCallback } from 'react'
+import { PDFViewer } from 'react-pdf-viewer-stamping'
+import 'react-pdf-viewer-stamping/style.css'
+
+// Bundler-specific — see "The pdf.js worker" below.
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
+export function SignDocument() {
+  const viewer = useRef(null)
+
+  const download = useCallback(async () => {
+    const blob = await viewer.current.getFlattenedPDF()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'signed.pdf'
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }, [])
+
+  return (
+    <div style={{ height: '100vh' }}>
+      <PDFViewer
+        ref={viewer}
+        src="/contract.pdf"
+        config={{ workerSrc, specimenAsset: '/signature.png', onDownload: download }}
+      />
+    </div>
+  )
+}
+```
+
+**The viewer fills its container**, so give the parent a height. Every story here is
+wrapped in an `80vh` box for exactly that reason.
+
+## Two things this library will not do for you
+
+**It never saves the file.** `onDownload` is yours to implement. That is what makes
+uploading the signed document — rather than downloading it — just as natural. See
+**Integration → Submit gating**.
+
+**It never bundles the pdf.js worker.** The worker is 1.25 MB; bundling it would make the
+package fifteen times larger for everyone, including apps that already ship their own
+copy of pdfjs-dist.
+
+## The pdf.js worker
+
+```js
+// Vite / Rollup
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
+// webpack 5 / Next.js
+const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+```
+
+Or copy `node_modules/pdfjs-dist/build/pdf.worker.min.mjs` into `public/` and pass
+`workerSrc: '/pdf.worker.min.mjs'` — remembering to re-copy on upgrade, because the
+worker and the API must be the same version.
+
+In Next.js the viewer must be client-side: add `'use client'` and load it with
+`dynamic(() => import('./Viewer'), { ssr: false })`.
+
+## `src` accepts more than a URL
+
+A URL string, `File`, `Blob`, `ArrayBuffer` or `Uint8Array`. The bytes are read once and
+reused for export, so a file picked straight from a file input works, and exporting does
+not depend on the URL still being reachable.
+
+## About the sample document
+
+The PDF in these stories is generated, not a real file, and is deliberately awkward:
+
+- **page 1** — plain A4
+- **page 2** — A4 carrying a `/Rotate 90` entry
+- **page 3** — a different page size
+
+Those three cases are what a viewer usually gets wrong. Rotation used to place exported
+annotations in the wrong spot on page 2, and zoom-fit used to measure only page 1 and so
+overflow on page 3.
+
+## Where to look next
+
+- **PDFViewer → Basic** — the options, as live controls
+- **Integration** — gating a Submit button, uploading instead of downloading, reading
+  annotations as data
+- **Customisation** — theming with CSS custom properties, translating the UI

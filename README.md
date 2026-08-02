@@ -28,11 +28,18 @@ text stays selectable and vector art stays vector; nothing is re-rasterised.
 ## Install
 
 ```bash
-npm install react-pdf-viewer-stamping
+npm install react-pdf-viewer-stamping pdfjs-dist
 ```
 
-React 18 or 19 is a peer dependency. `pdfjs-dist` and `pdf-lib` come along as
-dependencies.
+**Peer dependencies:** React 18 or 19, and `pdfjs-dist` v6. Modern npm, pnpm and bun
+install peers automatically, so the explicit `pdfjs-dist` above is belt-and-braces — but
+declaring it is worth doing, because your own code imports the worker from it.
+
+`pdfjs-dist` is a peer rather than a bundled dependency on purpose: two copies in one
+application means two 1.2 MB workers, and pdf.js refuses to run when the worker and the
+API come from different versions.
+
+`pdf-lib` is an ordinary dependency — it powers export and you never import it yourself.
 
 **This package is ESM only.** There is no CommonJS build, because there could not be a
 working one: pdfjs-dist v6 is itself ESM-only. Vite, webpack 5, Next.js, Rollup and

@@ -1,0 +1,21 @@
+# Normalise line endings in the repository.
+#
+# Without this, Git on Windows checks source out with CRLF, which made the generated
+# pdf.js CSS differ from what the extractor produces and failed its drift check for a
+# reason unrelated to the thing it guards.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.tgz   binary
+
+# Generated; keep it out of diffs and language stats.
+src/PDFViewer/styles/pdfjs-layers.generated.css linguist-generated=true
+bun.lock                                        linguist-generated=true

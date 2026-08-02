@@ -29,7 +29,7 @@ export default defineConfig([
   },
   // Tests and stories are not part of the Fast Refresh graph and may export helpers.
   {
-    files: ['**/*.{test,spec}.{js,jsx}', '**/*.stories.{js,jsx}', 'vitest.setup.js'],
+    files: ['**/*.{test,spec}.{js,jsx}', 'stories/**/*.{js,jsx}', 'vitest.setup.js'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },

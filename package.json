@@ -56,19 +56,23 @@
     "css:extract": "bun scripts/extract-pdfjs-css.mjs",
     "prepublishOnly": "bun run lint && bun run test && bun run build",
     "pack:check": "npm pack --dry-run",
-    "pack:local": "bun run build && bun scripts/pack-local.mjs"
+    "pack:local": "bun run build && bun scripts/pack-local.mjs",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.1.200"
+    "pdf-lib": "^1.17.1"
   },
   "peerDependencies": {
+    "pdfjs-dist": "^6.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@storybook/addon-docs": "^10.5.5",
+    "@storybook/react-vite": "^10.5.5",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
@@ -84,9 +88,11 @@
     "prettier": "^3.9.6",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "storybook": "^10.5.5",
     "tailwindcss": "^4.3.2",
     "vite": "^8.1.1",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "pdfjs-dist": "^6.1.200"
   },
   "types": "dist/index.d.ts",
   "engines": {

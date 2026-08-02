@@ -5,6 +5,14 @@ import { generate, TARGET } from '../../../scripts/extract-pdfjs-css.mjs'
 
 const root = resolve(import.meta.dirname, '../../..')
 
+/**
+ * Line endings are not part of what this file guards.
+ *
+ * Git on Windows rewrites LF to CRLF on checkout, so comparing raw strings made the
+ * drift check fail for reasons that had nothing to do with pdfjs-dist changing.
+ */
+const normalise = (text) => text.replace(/\r\n/g, '\n')
+
 describe('extracted pdf.js layer CSS', () => {
   it('matches what the extractor produces from the installed pdfjs-dist', async () => {
     /**
@@ -17,7 +25,7 @@ describe('extracted pdf.js layer CSS', () => {
       readFile(resolve(root, TARGET), 'utf8'),
       generate(),
     ])
-    expect(committed).toBe(expected)
+    expect(normalise(committed)).toBe(normalise(expected))
   })
 
   it('keeps the layers this library renders', async () => {
