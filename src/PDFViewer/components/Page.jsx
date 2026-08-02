@@ -1,294 +1,374 @@
-import { useState, useEffect, useRef } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-import { Stamp } from './Stamp';
-import { TextStamp } from './TextStamp';
-import { InkLayer } from './InkLayer';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import * as pdfjsLib from 'pdfjs-dist'
+import { ImageStamp } from './annotations/ImageStamp.jsx'
+import { TextStamp } from './annotations/TextStamp.jsx'
+import { InkLayer } from './annotations/InkLayer.jsx'
+import { ANNOTATION_TYPES } from '../reducers/annotationReducer.js'
+import { useViewer } from '../context/ViewerContext.jsx'
+import { useTools } from '../context/ToolContext.jsx'
+import { useAnnotationActions, usePageAnnotations } from '../context/AnnotationContext.jsx'
+import { viewRectToScreen, displayPageSize } from '../utils/coords.js'
+import { resolveDropTarget } from '../utils/pageHitTest.js'
+import { rotatePoint } from '../utils/transform.js'
+import styles from './Page.module.css'
 
-export const Page = ({ pdfDoc, pageNumber, scale, stamps, setStamps, textStamps = [], setTextStamps, specimenAsset, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }) => {
-    const canvasRef = useRef(null);
-    const textLayerRef = useRef(null);
-    const annotationLayerRef = useRef(null);
-    const containerRef = useRef(null);
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-    
-    // Smooth zoom state
-    const [debouncedScale, setDebouncedScale] = useState(scale);
-    // Tracks the actual resolution of the canvas currently on screen
-    const [canvasScale, setCanvasScale] = useState(scale);
+/** How long to coast on a CSS transform before re-rasterising at the new scale. */
+const RASTER_DEBOUNCE_MS = 300
 
-    useEffect(() => {
-        if (scale === debouncedScale) return;
-        const timer = setTimeout(() => {
-            setDebouncedScale(scale);
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [scale, debouncedScale]);
+export function Page({ pageNumber, registerPage, shouldRender = true }) {
+  const pageIndex = pageNumber - 1
+  const { pdfDoc, pageSizes, pageRotations, scale, stampAssets } = useViewer()
+  const {
+    isDrawMode,
+    inkColor,
+    inkThickness,
+    inkOpacity,
+    activeId,
+    setActiveId,
+    cancelStrokeRef,
+    isDraggingRef,
+  } = useTools()
+  const actions = useAnnotationActions()
+  const annotations = usePageAnnotations(pageIndex)
 
-    // Pre-fetch dimensions to prevent layout shifts on multi-page docs
-    useEffect(() => {
-        if (!pdfDoc) return;
-        let isMounted = true;
-        pdfDoc.getPage(pageNumber).then(page => {
-            if (!isMounted) return;
-            const viewport = page.getViewport({ scale: debouncedScale });
-            setDimensions(prev => prev.width === 0 ? { width: viewport.width, height: viewport.height } : prev);
-        });
-        return () => isMounted = false;
-    }, [pdfDoc, pageNumber, debouncedScale]);
+  const canvasRef = useRef(null)
+  const textLayerRef = useRef(null)
+  const annotationLayerRef = useRef(null)
+  const containerRef = useRef(null)
 
-    useEffect(() => {
-        let activeRenderTask = null;
+  // Rasterising on every zoom tick is far too slow, so the canvas lags behind and a
+  // CSS transform bridges the gap. `canvasScale` is what is actually on screen.
+  const [debouncedScale, setDebouncedScale] = useState(scale)
+  const [canvasScale, setCanvasScale] = useState(scale)
 
-        const renderPage = async () => {
-            if (!pdfDoc || !canvasRef.current) return;
-            
-            // Get the unscaled viewport to determine base aspect ratio, considering page rotation
-            const page = await pdfDoc.getPage(pageNumber);
-            const viewport = page.getViewport({ scale: debouncedScale });
+  // Known up front from the document load, so the page reserves the right space
+  // before anything has been rasterised.
+  const baseSize = pageSizes[pageIndex] ?? { width: 0, height: 0 }
 
-            const outputScale = window.devicePixelRatio || 1;
-            const targetWidth = Math.floor(viewport.width * outputScale);
-            const targetHeight = Math.floor(viewport.height * outputScale);
-            
-            // Render to an offscreen canvas to prevent flicker (blank canvas) during async render
-            const renderCanvas = document.createElement('canvas');
-            renderCanvas.width = targetWidth;
-            renderCanvas.height = targetHeight;
-            const renderContext = renderCanvas.getContext('2d', { alpha: false });
+  useEffect(() => {
+    if (scale === debouncedScale) return
+    const timer = setTimeout(() => setDebouncedScale(scale), RASTER_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [scale, debouncedScale])
 
-            const transform = outputScale !== 1
-                ? [outputScale, 0, 0, outputScale, 0, 0]
-                : null;
+  useEffect(() => {
+    if (!pdfDoc || !shouldRender) return
+    let renderTask = null
+    let cancelled = false
 
-            activeRenderTask = page.render({
-                canvasContext: renderContext,
-                transform: transform,
-                viewport: viewport,
-            });
+    const render = async () => {
+      const page = await pdfDoc.getPage(pageNumber)
+      if (cancelled || !canvasRef.current) return
 
-            try {
-                await activeRenderTask.promise;
+      const viewport = page.getViewport({ scale: debouncedScale })
+      const outputScale = window.devicePixelRatio || 1
+      const targetWidth = Math.floor(viewport.width * outputScale)
+      const targetHeight = Math.floor(viewport.height * outputScale)
 
-                // Only update the visible canvas AFTER rendering is perfectly complete
-                if (canvasRef.current) {
-                    const canvas = canvasRef.current;
-                    canvas.width = targetWidth;
-                    canvas.height = targetHeight;
-                    canvas.style.width = Math.floor(viewport.width) + "px";
-                    canvas.style.height =  Math.floor(viewport.height) + "px";
-                    
-                    const ctx = canvas.getContext('2d', { alpha: false });
-                    ctx.drawImage(renderCanvas, 0, 0);
+      // Render offscreen and blit, so the visible canvas is never blank mid-render.
+      const offscreen = document.createElement('canvas')
+      offscreen.width = targetWidth
+      offscreen.height = targetHeight
 
-                    // Sync the component's visual state to match the new HD canvas exactly when it appears
-                    setDimensions({
-                        width: viewport.width,
-                        height: viewport.height
-                    });
-                    setCanvasScale(debouncedScale);
-                }
+      renderTask = page.render({
+        canvasContext: offscreen.getContext('2d', { alpha: false }),
+        transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null,
+        viewport,
+      })
 
-                // Render Text Layer
-                const textContent = await page.getTextContent();
-                if (textLayerRef.current) {
-                    textLayerRef.current.innerHTML = '';
-                    const textLayer = new pdfjsLib.TextLayer({
-                        textContentSource: textContent,
-                        container: textLayerRef.current,
-                        viewport: viewport,
-                    });
-                    await textLayer.render();
-                }
+      try {
+        await renderTask.promise
+        if (cancelled || !canvasRef.current) return
 
-                // Render Annotation Layer (Links, Forms, etc.)
-                const annotations = await page.getAnnotations();
-                if (annotationLayerRef.current && annotations.length > 0) {
-                    annotationLayerRef.current.innerHTML = '';
-                    
-                    // SimpleLinkService mock for basic link rendering without complex routing
-                    const simpleLinkService = {
-                        getDestinationHash: () => '',
-                        navigateTo: () => {},
-                        getAnchorUrl: () => '',
-                        setDocument: () => {},
-                        executeNamedAction: () => {},
-                        cachePageRef: () => {},
-                        isPageVisible: () => true,
-                        isPageCached: () => true,
-                        page: pageNumber
-                    };
+        const canvas = canvasRef.current
+        canvas.width = targetWidth
+        canvas.height = targetHeight
+        canvas.style.width = `${Math.floor(viewport.width)}px`
+        canvas.style.height = `${Math.floor(viewport.height)}px`
+        canvas.getContext('2d', { alpha: false }).drawImage(offscreen, 0, 0)
+        setCanvasScale(debouncedScale)
 
-                    const annotationLayer = new pdfjsLib.AnnotationLayer({
-                        page: page,
-                        viewport: viewport.clone({ dontFlip: true }),
-                        div: annotationLayerRef.current,
-                        annotations: annotations,
-                        linkService: simpleLinkService,
-                        downloadManager: null,
-                        renderInteractiveForms: true
-                    });
+        const textContent = await page.getTextContent()
+        if (cancelled || !textLayerRef.current) return
+        textLayerRef.current.innerHTML = ''
+        await new pdfjsLib.TextLayer({
+          textContentSource: textContent,
+          container: textLayerRef.current,
+          viewport,
+        }).render()
 
-                    await annotationLayer.render({
-                        annotations: annotations,
-                        div: annotationLayerRef.current,
-                        page: page,
-                        viewport: viewport.clone({ dontFlip: true }),
-                        linkService: simpleLinkService,
-                        renderInteractiveForms: true
-                    });
-                }
+        const pdfAnnotations = await page.getAnnotations()
+        if (cancelled || !annotationLayerRef.current || pdfAnnotations.length === 0) return
+        annotationLayerRef.current.innerHTML = ''
 
-            } catch (err) {
-                if (err?.name !== 'RenderingCancelledException') {
-                    console.error('Render error:', err);
-                }
-            }
-        };
+        // Links and form widgets are rendered but inert; there is no navigation yet.
+        const linkService = {
+          getDestinationHash: () => '',
+          getAnchorUrl: () => '',
+          navigateTo: () => {},
+          setDocument: () => {},
+          executeNamedAction: () => {},
+          cachePageRef: () => {},
+          isPageVisible: () => true,
+          isPageCached: () => true,
+          page: pageNumber,
+        }
+        const layerViewport = viewport.clone({ dontFlip: true })
+        await new pdfjsLib.AnnotationLayer({
+          page,
+          viewport: layerViewport,
+          div: annotationLayerRef.current,
+          annotations: pdfAnnotations,
+          linkService,
+          downloadManager: null,
+          renderInteractiveForms: true,
+        }).render({
+          annotations: pdfAnnotations,
+          div: annotationLayerRef.current,
+          page,
+          viewport: layerViewport,
+          linkService,
+          renderInteractiveForms: true,
+        })
+      } catch (err) {
+        if (err?.name !== 'RenderingCancelledException') {
+          console.error('[react-pdf-viewer-stamping] Page render failed:', err)
+        }
+      }
+    }
 
-        renderPage();
+    render()
+    return () => {
+      cancelled = true
+      renderTask?.cancel()
+    }
+  }, [pdfDoc, pageNumber, debouncedScale, shouldRender])
 
-        return () => {
-            if (activeRenderTask) {
-                activeRenderTask.cancel();
-            }
-        };
-    }, [pdfDoc, pageNumber, debouncedScale]);
+  /**
+   * A finished move/resize/rotate. TransformBox reports screen pixels; the store holds
+   * view space, so this is the single place that divides by scale.
+   *
+   * It also resolves which page the object ended up over, so an annotation dragged
+   * past a page boundary lands on the page it visually belongs to. The whole gesture
+   * arrives as one update, hence one undo step — no transaction needed.
+   */
+  const commitTransform = useCallback(
+    (id, rect, rotation, node) => {
+      const width = rect.width / scale
+      const height = rect.height / scale
+      const patch = { rotation, width, height }
 
-    const pageStamps = stamps.filter(s => s.pageIndex === pageNumber - 1);
-    const pageTextStamps = textStamps.filter(s => s.pageIndex === pageNumber - 1);
+      const dropped = node ? resolveDropTarget(node.getBoundingClientRect()) : null
 
-    const updateStamp = (id, newData) => {
-        const unscaledData = { ...newData };
-        if (newData.x !== undefined) unscaledData.x = newData.x / scale;
-        if (newData.y !== undefined) unscaledData.y = newData.y / scale;
-        if (newData.width !== undefined) unscaledData.width = newData.width / scale;
-        if (newData.height !== undefined) unscaledData.height = newData.height / scale;
-        if (newData.pageIndex !== undefined) unscaledData.pageIndex = newData.pageIndex;
+      if (dropped && dropped.pageIndex !== pageIndex) {
+        /*
+          Landed on a different page, which may be rotated differently from this one.
+          The conversion goes through the box CENTRE rather than its top-left: a
+          rotated element's bounding rect is its rotated bbox, whose top-left is not
+          the box corner — but its centre always is the box centre.
+        */
+        const nodeRect = node.getBoundingClientRect()
+        const targetRotation = pageRotations[dropped.pageIndex] ?? 0
+        const targetBase = pageSizes[dropped.pageIndex] ?? { width: 0, height: 0 }
 
-        setStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
-    };
+        const fromContainerCentre = {
+          x:
+            nodeRect.left + nodeRect.width / 2 - (dropped.pageRect.left + dropped.pageRect.width / 2),
+          y:
+            nodeRect.top + nodeRect.height / 2 - (dropped.pageRect.top + dropped.pageRect.height / 2),
+        }
 
-    const updateTextStamp = (id, newData) => {
-        const unscaledData = { ...newData };
-        // Scale positions and sizes back to PDF resolution
-        if (newData.x !== undefined) unscaledData.x = newData.x / scale;
-        if (newData.y !== undefined) unscaledData.y = newData.y / scale;
-        if (newData.width !== undefined) unscaledData.width = newData.width / scale;
-        if (newData.height !== undefined) unscaledData.height = newData.height / scale;
+        // The target page's content wrapper is centred in its container and turned by
+        // its own rotation, so undoing that rotation lands us in its base view space.
+        const inWrapper = rotatePoint(fromContainerCentre, -targetRotation)
+        const centre = {
+          x: inWrapper.x / scale + targetBase.width / 2,
+          y: inWrapper.y / scale + targetBase.height / 2,
+        }
 
-        setTextStamps(prev => prev.map(s => (s.id === id ? { ...s, ...unscaledData } : s)));
-    };
+        patch.pageIndex = dropped.pageIndex
+        patch.x = centre.x - width / 2
+        patch.y = centre.y - height / 2
+      } else {
+        // Same page: the rect is already in this page's base view space, because
+        // TransformBox positions inside the rotated wrapper.
+        patch.x = rect.x / scale
+        patch.y = rect.y / scale
+      }
 
-    const cssScale = scale / canvasScale;
+      actions.update(id, patch)
+    },
+    [actions, scale, pageIndex, pageRotations, pageSizes]
+  )
 
-    return (
-        <div 
-            ref={containerRef}
-            className="pdf-page-container relative shrink-0 shadow-sm bg-white origin-top border border-gray-400 mx-auto" 
-            data-page-index={pageNumber - 1}
-            style={{ 
-                width: dimensions.width > 0 ? dimensions.width * cssScale : 'auto',
-                height: dimensions.height > 0 ? dimensions.height * cssScale : 'auto',
-            }}
-            onMouseDown={(e) => {
-                if (e.target === canvasRef.current || e.target === containerRef.current) {
-                    setActiveStampId(null);
-                }
-            }}
-        >
-            <div
-                style={{
-                    transform: `scale(${cssScale})`,
-                    transformOrigin: 'top left',
-                    width: dimensions.width,
-                    height: dimensions.height,
-                    position: 'absolute',
-                    left: 0,
-                    top: 0
-                }}
-            >
-                <canvas ref={canvasRef} className="block" />
-                <div 
-                    ref={textLayerRef} 
-                    className="textLayer" 
-                    style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        overflow: 'hidden',
-                        lineHeight: 1.0,
-                        opacity: 1, // Let users see selection highlights
-                        '--scale-factor': canvasScale,
-                        '--total-scale-factor': canvasScale
-                    }}
-                />
-                <div 
-                    ref={annotationLayerRef} 
-                    className="annotationLayer" 
-                    style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        overflow: 'hidden',
-                        '--scale-factor': canvasScale,
-                        '--total-scale-factor': canvasScale
-                    }}
-                />
-                
-                <InkLayer 
-                    width={dimensions.width}
-                    height={dimensions.height}
-                    scale={scale}
-                    isDrawMode={isDrawMode}
-                    inkAnnotations={inkAnnotations}
-                    setInkAnnotations={setInkAnnotations}
-                    inkColor={inkColor}
-                    inkThickness={inkThickness}
-                    inkOpacity={inkOpacity}
-                />
-            </div>
+  const editAnnotation = useCallback((id, patch) => actions.update(id, patch), [actions])
+  const duplicateAnnotation = useCallback((id) => actions.duplicate(id), [actions])
+  const commitInk = useCallback((annotation) => actions.add(annotation), [actions])
 
-            {pageStamps.map(stamp => (
-                <Stamp
-                    key={stamp.id}
-                    stamp={{
-                        ...stamp,
-                        x: stamp.x * scale,
-                        y: stamp.y * scale,
-                        width: stamp.width * scale,
-                        height: stamp.height * scale
-                    }}
-                    specimenAsset={specimenAsset}
-                    isActive={activeStampId === stamp.id}
-                    setActiveStampId={setActiveStampId}
-                    updateStamp={updateStamp}
-                    onDeleteStamp={onDeleteStamp}
-                    scale={scale}
-                />
-            ))}
+  const removeAnnotation = useCallback(
+    (id) => {
+      actions.remove(id)
+      setActiveId(null)
+    },
+    [actions, setActiveId]
+  )
 
-            {pageTextStamps.map(stamp => (
-                <TextStamp
-                    key={stamp.id}
-                    stamp={{
-                        ...stamp,
-                        x: stamp.x * scale,
-                        y: stamp.y * scale,
-                        width: stamp.width * scale,
-                        height: stamp.height * scale,
-                        // Note: fontSize is handled directly in TextStamp based on scale prop
-                    }}
-                    isActive={activeStampId === stamp.id}
-                    setActiveStampId={setActiveStampId}
-                    updateTextStamp={updateTextStamp}
-                    onDeleteStamp={onDeleteStamp}
-                    scale={scale}
-                />
-            ))}
+  const { strokes, objects } = useMemo(
+    () => ({
+      strokes: annotations.filter((a) => a.type === ANNOTATION_TYPES.INK),
+      objects: annotations.filter((a) => a.type !== ANNOTATION_TYPES.INK),
+    }),
+    [annotations]
+  )
+
+  const cssScale = canvasScale > 0 ? scale / canvasScale : 1
+
+  // Extra turn applied by the viewer's rotate buttons, on top of the page's own
+  // /Rotate. It affects display only and never reaches the exported file.
+  const userRotation = pageRotations[pageIndex] ?? 0
+  const displaySize = displayPageSize(baseSize, userRotation)
+
+  /** Set the local ref and hand the element to Document's IntersectionObserver. */
+  const attachContainer = useCallback(
+    (element) => {
+      containerRef.current = element
+      registerPage?.(pageIndex, element)
+    },
+    [registerPage, pageIndex]
+  )
+
+  return (
+    <div
+      ref={attachContainer}
+      className={`pdf-page-container ${styles.page}`}
+      data-page-index={pageIndex}
+      style={{
+        width: displaySize.width ? displaySize.width * scale : 'auto',
+        height: displaySize.height ? displaySize.height * scale : 'auto',
+      }}
+      // Every annotation stops mousedown on itself, so anything reaching the page
+      // container is a click on empty page area. Matching only the canvas and the
+      // container by identity missed clicks landing on the text or annotation layer,
+      // which cover the canvas.
+      onMouseDown={() => setActiveId(null)}
+    >
+      {/*
+        Outside the render window the container keeps its full size — so the scrollbar
+        stays honest and cross-page drag hit-testing still finds this page — but
+        nothing is rasterised. Annotations live in the central store, so a page that
+        was never scrolled into view still exports correctly.
+      */}
+      {!shouldRender ? (
+        <div className={styles.placeholder}>
+          {pageNumber}
         </div>
-    );
-};
+      ) : (
+        /*
+          Viewer rotation is applied once, to a wrapper holding the whole page —
+          canvas, text layer, PDF annotation layer, ink and stamps alike.
+
+          The alternative was to leave the wrapper upright and remap every annotation
+          into rotated coordinates, which would mean a conversion at each of the four
+          boundaries the coordinate system already crosses. Rotating the container
+          keeps every child in plain base view space: the ink layer's getScreenCTM()
+          picks up the CSS rotation for free, and stamps only need to know the frame
+          angle so pointer deltas can be un-rotated.
+
+          The wrapper is centred in the container, so a quarter turn lines up exactly.
+        */
+        <div
+          className={styles.rotator}
+          style={{
+            width: baseSize.width * scale,
+            height: baseSize.height * scale,
+            left: (displaySize.width * scale - baseSize.width * scale) / 2,
+            top: (displaySize.height * scale - baseSize.height * scale) / 2,
+            transform: userRotation ? `rotate(${userRotation}deg)` : undefined,
+          }}
+        >
+          <div
+            className={styles.raster}
+            style={{
+              transform: `scale(${cssScale})`,
+              width: baseSize.width * canvasScale,
+              height: baseSize.height * canvasScale,
+            }}
+          >
+            <canvas ref={canvasRef} className={styles.canvas} />
+            <div
+              ref={textLayerRef}
+              className={`textLayer ${styles.layer}`}
+              style={{
+                '--scale-factor': canvasScale,
+                '--total-scale-factor': canvasScale,
+              }}
+            />
+            <div
+              ref={annotationLayerRef}
+              className={`annotationLayer ${styles.layer}`}
+              style={{
+                '--scale-factor': canvasScale,
+                '--total-scale-factor': canvasScale,
+              }}
+            />
+
+            <InkLayer
+              pageIndex={pageIndex}
+              pageWidth={baseSize.width}
+              pageHeight={baseSize.height}
+              strokes={strokes}
+              isDrawMode={isDrawMode}
+              inkColor={inkColor}
+              inkThickness={inkThickness}
+              inkOpacity={inkOpacity}
+              activeId={activeId}
+              onSelect={setActiveId}
+              onCommit={commitInk}
+              onDelete={removeAnnotation}
+              cancelStrokeRef={cancelStrokeRef}
+            />
+          </div>
+
+          {objects.map((annotation) =>
+            annotation.type === ANNOTATION_TYPES.TEXT ? (
+              <TextStamp
+                key={annotation.id}
+                annotation={annotation}
+                screenRect={viewRectToScreen(annotation, scale)}
+                frameRotation={userRotation}
+                scale={scale}
+                isActive={activeId === annotation.id}
+                // A box created empty was just asked for, so focus it and let the
+                // user type; one that already has text was probably just clicked.
+                autoFocus={activeId === annotation.id && annotation.text === ''}
+                onSelect={setActiveId}
+                onCommit={commitTransform}
+                onEdit={editAnnotation}
+                onDuplicate={duplicateAnnotation}
+                onDelete={removeAnnotation}
+                onGestureStart={actions.beginGesture}
+                onGestureEnd={actions.endGesture}
+                isDraggingRef={isDraggingRef}
+              />
+            ) : (
+              <ImageStamp
+                key={annotation.id}
+                annotation={annotation}
+                screenRect={viewRectToScreen(annotation, scale)}
+                frameRotation={userRotation}
+                src={stampAssets[annotation.assetId]?.src}
+                isActive={activeId === annotation.id}
+                onSelect={setActiveId}
+                onCommit={commitTransform}
+                onEdit={editAnnotation}
+                onDuplicate={duplicateAnnotation}
+                onDelete={removeAnnotation}
+                isDraggingRef={isDraggingRef}
+              />
+            )
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

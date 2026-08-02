@@ -1,0 +1,83 @@
+.box {
+  position: absolute;
+  transform-origin: center center;
+  cursor: move;
+  touch-action: none;
+  z-index: 10;
+}
+
+.boxSelected {
+  z-index: 50;
+}
+
+.boxTransforming {
+  cursor: grabbing;
+}
+
+/*
+ * Opacity lives here, on the content only.
+ *
+ * Putting it on `.box` looked equivalent but was not: CSS opacity forms a stacking
+ * context and multiplies down the whole subtree, so a child cannot opt back out with
+ * `opacity: 1`. Fading a stamp to 20% also faded its selection border, resize handles
+ * and toolbar to 20% — leaving the controls unusable at exactly the moment the user
+ * was adjusting them.
+ */
+.content {
+  position: absolute;
+  inset: 0;
+}
+
+.outline {
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  pointer-events: none;
+  transition:
+    border-color var(--rpvs-transition),
+    background-color var(--rpvs-transition);
+}
+
+.box:hover .outline {
+  border-color: var(--rpvs-selection);
+  background: rgb(59 130 246 / 0.1);
+}
+
+.outlineSelected,
+.box:hover .outlineSelected {
+  border-color: var(--rpvs-selection);
+  background: rgb(59 130 246 / 0.05);
+}
+
+.handle {
+  position: absolute;
+  display: block;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  margin-top: -5px;
+  background: #fff;
+  border: 1px solid var(--rpvs-selection);
+  border-radius: 2px;
+}
+
+.rotateHandle {
+  position: absolute;
+  display: block;
+  width: 12px;
+  height: 12px;
+  left: 50%;
+  top: -26px;
+  margin-left: -6px;
+  background: #fff;
+  border: 1px solid var(--rpvs-selection);
+  border-radius: 9999px;
+  cursor: grab;
+}
+
+/* Anchored at the box centre; TransformBox supplies the counter-rotating transform. */
+.toolbarAnchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}

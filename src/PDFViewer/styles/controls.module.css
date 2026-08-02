@@ -1,0 +1,183 @@
+/*
+ * Shared control primitives.
+ *
+ * These were repeated utility strings — the chip button alone appeared verbatim in
+ * six places, and every icon button carried the same eight utilities. Other modules
+ * pull them in with `composes:` so a change lands once.
+ */
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: var(--rpvs-radius);
+  background: transparent;
+  color: var(--rpvs-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--rpvs-transition),
+    color var(--rpvs-transition);
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--rpvs-control-hover);
+  color: var(--rpvs-text-strong);
+}
+
+.iconButton:disabled {
+  color: var(--rpvs-text-dim);
+  cursor: not-allowed;
+}
+
+.iconButton[aria-pressed='true'] {
+  background: var(--rpvs-control-hover);
+  color: var(--rpvs-text-strong);
+}
+
+/* Bordered variant, for actions that need to read as buttons rather than affordances. */
+.chipButton {
+  composes: iconButton;
+  gap: var(--rpvs-gap);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--rpvs-control-bg);
+  border: 1px solid var(--rpvs-control-border);
+  color: var(--rpvs-text);
+}
+
+.chipButton:hover:not(:disabled) {
+  background: var(--rpvs-control-hover);
+  color: var(--rpvs-text-strong);
+}
+
+.primaryButton {
+  composes: iconButton;
+  gap: var(--rpvs-gap);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--rpvs-accent);
+  color: var(--rpvs-text-strong);
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--rpvs-accent-hover);
+  color: var(--rpvs-text-strong);
+}
+
+.primaryButton:disabled {
+  background: var(--rpvs-control-bg);
+  color: var(--rpvs-text-dim);
+}
+
+/* Toggle that is currently on. */
+.active {
+  background: var(--rpvs-accent);
+  border-color: var(--rpvs-accent);
+  color: var(--rpvs-text-strong);
+}
+
+.active:hover:not(:disabled) {
+  background: var(--rpvs-accent-hover);
+  color: var(--rpvs-text-strong);
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--rpvs-control-border);
+  flex: none;
+}
+
+.popover {
+  position: absolute;
+  top: 100%;
+  margin-top: var(--rpvs-gap);
+  background: var(--rpvs-popover-bg);
+  border: 1px solid var(--rpvs-popover-border);
+  border-radius: var(--rpvs-radius-lg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4);
+  color: var(--rpvs-text);
+  z-index: 50;
+}
+
+.fieldLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--rpvs-text-muted);
+  margin-bottom: 4px;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--rpvs-selection);
+  cursor: pointer;
+}
+
+.numberInput {
+  width: 38px;
+  height: 24px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--rpvs-text-strong);
+  background: var(--rpvs-field-bg);
+  border: none;
+  border-radius: var(--rpvs-radius);
+  outline: none;
+}
+
+.select {
+  height: 24px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--rpvs-text-strong);
+  background: var(--rpvs-field-bg);
+  border: none;
+  border-radius: var(--rpvs-radius);
+  outline: none;
+  cursor: pointer;
+}
+
+/* A round colour well; the native swatch is oversized and offset to fill it. */
+.colorWell {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--rpvs-control-border);
+  cursor: pointer;
+}
+
+.colorWell:hover {
+  box-shadow: inset 0 0 0 1px var(--rpvs-text-muted);
+}
+
+.colorWell input {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  background: none;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

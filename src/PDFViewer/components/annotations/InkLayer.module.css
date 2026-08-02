@@ -1,0 +1,34 @@
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  z-index: 20;
+
+  /*
+   * Outside draw mode the layer must not swallow clicks meant for the text layer
+   * underneath; individual strokes opt back in with `pointer-events: stroke`.
+   */
+  pointer-events: none;
+}
+
+.layerDrawing {
+  z-index: 50;
+  pointer-events: auto;
+}
+
+.strokeHit {
+  cursor: pointer;
+  pointer-events: stroke;
+}
+
+.stroke {
+  pointer-events: none;
+}
+
+.deleteBadge {
+  cursor: pointer;
+  pointer-events: auto;
+}

@@ -1,0 +1,64 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--rpvs-floating-bg);
+  color: var(--rpvs-text);
+  border-radius: var(--rpvs-radius-lg);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4);
+  cursor: default;
+  white-space: nowrap;
+  font-family: var(--rpvs-font);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  border-radius: var(--rpvs-radius);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--rpvs-transition);
+}
+
+.button:hover {
+  background: var(--rpvs-floating-hover);
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--rpvs-floating-hover);
+  flex: none;
+}
+
+.opacity {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px;
+}
+
+.opacityIcon {
+  flex: none;
+  color: var(--rpvs-text-muted);
+}
+
+.opacityRange {
+  width: 64px;
+  accent-color: var(--rpvs-selection);
+  cursor: pointer;
+}
+
+.opacityValue {
+  width: 30px;
+  font-size: 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--rpvs-text-muted);
+}

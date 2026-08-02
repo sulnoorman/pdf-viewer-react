@@ -1,30 +1,67 @@
 {
   "name": "react-pdf-viewer-stamping",
-  "version": "1.0.0",
+  "version": "0.1.0",
+  "description": "A batteries-included React PDF viewer with built-in stamping and freehand annotation — pdf.js rendering and pdf-lib export in a single component.",
+  "keywords": [
+    "react",
+    "pdf",
+    "pdf-viewer",
+    "pdfjs",
+    "pdf-lib",
+    "annotation",
+    "stamp",
+    "signature",
+    "e-sign",
+    "freehand",
+    "ink"
+  ],
+  "license": "MIT",
+  "author": "sulnoorman <frontend@armsolusi.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sulnoorman/pdf-viewer-react.git"
+  },
+  "homepage": "https://github.com/sulnoorman/pdf-viewer-react#readme",
+  "bugs": {
+    "url": "https://github.com/sulnoorman/pdf-viewer-react/issues"
+  },
   "type": "module",
-  "main": "dist/react-pdf-viewer-stamping.umd.cjs",
-  "module": "dist/react-pdf-viewer-stamping.js",
+  "main": "dist/react-pdf-viewer-stamping.js",
   "exports": {
     ".": {
-      "import": "./dist/react-pdf-viewer-stamping.js",
-      "require": "./dist/react-pdf-viewer-stamping.umd.cjs"
-    }
+      "types": "./dist/index.d.ts",
+      "import": "./dist/react-pdf-viewer-stamping.js"
+    },
+    "./style.css": "./dist/style.css",
+    "./package.json": "./package.json"
   },
+  "sideEffects": [
+    "*.css"
+  ],
   "files": [
     "dist"
   ],
+  "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && bun scripts/copy-types.mjs",
+    "preview": "vite preview",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "fixture": "bun scripts/make-fixture.mjs",
+    "css:extract": "bun scripts/extract-pdfjs-css.mjs",
+    "prepublishOnly": "bun run lint && bun run test && bun run build",
+    "pack:check": "npm pack --dry-run",
+    "pack:local": "bun run build && bun scripts/pack-local.mjs"
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
-    "@tailwindcss/vite": "^4.3.2",
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^6.1.200",
-    "react-rnd": "^10.5.3"
+    "pdfjs-dist": "^6.1.200"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -32,6 +69,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.2",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
@@ -39,9 +80,16 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
+    "jsdom": "^30.0.1",
+    "prettier": "^3.9.6",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwindcss": "^4.3.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "^4.1.10"
+  },
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=18"
   }
 }

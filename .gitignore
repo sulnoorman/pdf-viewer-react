@@ -12,6 +12,18 @@ dist
 dist-ssr
 *.local
 
+# Package tarballs from npm pack
+*.tgz
+
+# Test / docs tooling output
+coverage
+storybook-static
+
+# Lockfiles from other package managers — this project standardises on bun.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

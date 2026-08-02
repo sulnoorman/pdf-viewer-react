@@ -1,197 +1,331 @@
-import { useState } from 'react';
-import IconZoomOut from '@tabler/icons-react/dist/esm/icons/IconZoomOut.mjs';
-import IconZoomIn from '@tabler/icons-react/dist/esm/icons/IconZoomIn.mjs';
-import IconChevronDown from '@tabler/icons-react/dist/esm/icons/IconChevronDown.mjs';
-import IconArrowBackUp from '@tabler/icons-react/dist/esm/icons/IconArrowBackUp.mjs';
-import IconArrowForwardUp from '@tabler/icons-react/dist/esm/icons/IconArrowForwardUp.mjs';
-import IconPencil from '@tabler/icons-react/dist/esm/icons/IconPencil.mjs';
-import IconRubberStamp from '@tabler/icons-react/dist/esm/icons/IconRubberStamp.mjs';
-import IconDownload from '@tabler/icons-react/dist/esm/icons/IconDownload.mjs';
+import { useState } from 'react'
+import IconZoomOut from '@tabler/icons-react/dist/esm/icons/IconZoomOut.mjs'
+import IconZoomIn from '@tabler/icons-react/dist/esm/icons/IconZoomIn.mjs'
+import IconChevronDown from '@tabler/icons-react/dist/esm/icons/IconChevronDown.mjs'
+import IconArrowBackUp from '@tabler/icons-react/dist/esm/icons/IconArrowBackUp.mjs'
+import IconArrowForwardUp from '@tabler/icons-react/dist/esm/icons/IconArrowForwardUp.mjs'
+import IconPencil from '@tabler/icons-react/dist/esm/icons/IconPencil.mjs'
+import IconTypography from '@tabler/icons-react/dist/esm/icons/IconTypography.mjs'
+import IconDownload from '@tabler/icons-react/dist/esm/icons/IconDownload.mjs'
+import IconLayoutSidebar from '@tabler/icons-react/dist/esm/icons/IconLayoutSidebar.mjs'
+import IconRotate from '@tabler/icons-react/dist/esm/icons/IconRotate.mjs'
+import IconRotateClockwise from '@tabler/icons-react/dist/esm/icons/IconRotateClockwise.mjs'
+import { useTools } from '../context/ToolContext.jsx'
+import { MIN_SCALE, MAX_SCALE } from '../hooks/useZoom.js'
+import { PageNavigation } from './PageNavigation.jsx'
+import { StampMenu } from './StampMenu.jsx'
+import controls from '../styles/controls.module.css'
+import styles from './Toolbar.module.css'
+import { useLabels } from '../context/LabelContext.jsx'
 
-export const Toolbar = ({ 
-    scale, setScale, zoomMode, setZoomMode, 
-    onAddStamp, onDownload, canDownload, 
-    isDrawMode, setIsDrawMode, 
-    inkColor, setInkColor, inkThickness, setInkThickness, inkOpacity, setInkOpacity, 
-    canUndoInk, undoInk, canRedoInk, redoInk,
-    customToolbarActions = []
-}) => {
-    const presetScales = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 8, 10];
-    const isCustomScale = zoomMode === 'custom' && !presetScales.includes(scale);
+const PRESET_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 8, 10]
+const ZOOM_STEP = 0.2
 
-    const [showDrawSettings, setShowDrawSettings] = useState(false);
+/**
+ * The viewer chrome.
+ *
+ * Actions are icon-only, the way Chrome's and pdf.js's viewers do it. Labelled
+ * buttons ate most of the bar's width and pushed the zoom cluster off-centre on
+ * anything narrower than a desktop window; each control keeps its name in `title`
+ * and `aria-label`, so nothing is lost but the horizontal space.
+ *
+ * Three groups — navigation, zoom, tools — and they give up space in that order as
+ * the window narrows: page navigation goes first because scrolling and the keyboard
+ * still reach every page.
+ */
+export function Toolbar({
+  scale,
+  setScale,
+  zoomMode,
+  setZoomMode,
+  stampAssets,
+  allowStampUpload,
+  onAddStamp,
+  onUploadStamp,
+  onAddText,
+  onDownload,
+  canDownload,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  pageCount,
+  activePageIndex,
+  onGoToPage,
+  showThumbnails,
+  onToggleThumbnails,
+  onRotatePages,
+  customToolbarActions = [],
+}) {
+  const labels = useLabels()
+  const {
+    isDrawMode,
+    setIsDrawMode,
+    inkColor,
+    setInkColor,
+    inkThickness,
+    setInkThickness,
+    inkOpacity,
+    setInkOpacity,
+  } = useTools()
 
-    return (
-        <div className="flex items-center justify-between px-4 py-2 bg-[#323639] border-b border-[#202224] shadow-md z-10 text-white h-12 shrink-0">
-            <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold ml-2 text-gray-200">PDF Viewer & Stamper</span>
-            </div>
+  const [showDrawSettings, setShowDrawSettings] = useState(false)
+  const isCustomScale = zoomMode === 'custom' && !PRESET_SCALES.includes(scale)
 
-            <div className="flex items-center gap-1 bg-[#202224] rounded px-1 py-1">
-                <button
-                    type='button'
-                    onClick={() => setScale(s => Math.max(0.5, s - 0.2))}
-                    className="p-1 hover:bg-[#525659] rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                    title="Zoom Out"
-                >
-                    <IconZoomOut size={16} stroke={2} />
-                </button>
-                <div className="relative flex items-center">
-                    <select
-                        value={zoomMode === 'custom' ? scale.toString() : zoomMode}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            if (['auto', 'page-fit', 'page-width', 'actual-size'].includes(val)) {
-                                setZoomMode(val);
-                            } else {
-                                setScale(parseFloat(val));
-                            }
-                        }}
-                        className="w-30 bg-transparent border-none text-gray-200 text-xs font-medium focus:outline-none focus:bg-[#424649] rounded py-1 pl-2 pr-4 appearance-none cursor-pointer hover:bg-[#525659] transition-colors"
-                    >
-                        <option value="auto">Automatic Zoom</option>
-                        <option value="actual-size">Actual Size</option>
-                        <option value="page-fit">Page Fit</option>
-                        <option value="page-width">Page Width</option>
-                        <option disabled>──────────</option>
-                        <option value="0.5">50%</option>
-                        <option value="0.75">75%</option>
-                        <option value="1">100%</option>
-                        <option value="1.25">125%</option>
-                        <option value="1.5">150%</option>
-                        <option value="2">200%</option>
-                        <option value="3">300%</option>
-                        <option value="4">400%</option>
-                        <option value="5">500%</option>
-                        <option value="8">800%</option>
-                        <option value="10">1000%</option>
-                        {isCustomScale && (
-                            <option value={scale.toString()} hidden>
-                                {Math.round(scale * 100)}%
-                            </option>
-                        )}
-                    </select>
-                    <div className="absolute right-2 pointer-events-none">
-                        <IconChevronDown size={14} className="text-gray-400" stroke={2} />
-                    </div>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => setScale(s => Math.min(10, s + 0.2))}
-                    className="p-1 hover:bg-[#525659] rounded text-gray-300 hover:text-white transition-colors cursor-pointer"
-                    title="Zoom In"
-                >
-                    <IconZoomIn size={16} stroke={2} />
-                </button>
-            </div>
+  return (
+    <div className={styles.toolbar}>
+      {/* Navigation */}
+      <div className={styles.group}>
+        <button
+          type="button"
+          onClick={onToggleThumbnails}
+          aria-pressed={showThumbnails}
+          className={controls.iconButton}
+          title={labels.toggleThumbnails}
+          aria-label={labels.toggleThumbnails}
+        >
+          <IconLayoutSidebar size={16} stroke={2} />
+        </button>
 
-            <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 mr-2">
-                    <button
-                        type='button'
-                        onClick={undoInk}
-                        disabled={!canUndoInk}
-                        className={`p-1.5 rounded transition-colors ${canUndoInk ? 'text-gray-200 hover:bg-[#525659] hover:text-white cursor-pointer' : 'text-gray-600 cursor-not-allowed'}`}
-                        title="Undo"
-                    >
-                        <IconArrowBackUp size={16} stroke={2} />
-                    </button>
-                    <button
-                        type='button'
-                        onClick={redoInk}
-                        disabled={!canRedoInk}
-                        className={`p-1.5 rounded transition-colors ${canRedoInk ? 'text-gray-200 hover:bg-[#525659] hover:text-white cursor-pointer' : 'text-gray-600 cursor-not-allowed'}`}
-                        title="Redo"
-                    >
-                        <IconArrowForwardUp size={16} stroke={2} />
-                    </button>
-                </div>
-
-                <div className="relative flex items-center">
-                    <button
-                        type='button'
-                        onClick={() => setIsDrawMode(!isDrawMode)}
-                        className={`px-3 py-1.5 border border-r-0 text-xs font-medium rounded-l transition-colors flex items-center gap-2 cursor-pointer ${isDrawMode
-                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700'
-                                : 'bg-[#424649] border-[#525659] text-gray-200 hover:bg-[#525659] hover:text-white'
-                            }`}
-                    >
-                        <IconPencil size={14} stroke={2} />
-                        Draw
-                    </button>
-                    <button
-                        type='button'
-                        onClick={() => setShowDrawSettings(!showDrawSettings)}
-                        className={`px-2 py-1.5 border text-xs font-medium rounded-r transition-colors flex items-center cursor-pointer ${isDrawMode
-                                ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700'
-                                : 'bg-[#424649] border-[#525659] text-gray-200 hover:bg-[#525659] hover:text-white'
-                            }`}
-                    >
-                        <IconChevronDown size={14} stroke={2} />
-                    </button>
-
-                    {showDrawSettings && (
-                        <div className="absolute top-full left-0 mt-2 w-48 bg-[#323639] border border-[#525659] rounded-md shadow-lg p-3 z-50 text-gray-200">
-                            <div className="mb-3">
-                                <label className="text-xs mb-1 block text-gray-300">Color</label>
-                                <div className="flex items-center gap-2">
-                                    <input type="color" value={inkColor} onChange={e => setInkColor(e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-none p-0" />
-                                    <span className="text-xs font-mono">{inkColor}</span>
-                                </div>
-                            </div>
-                            <div className="mb-3">
-                                <label className="text-xs mb-1 flex justify-between text-gray-300">
-                                    <span>Thickness</span>
-                                    <span>{inkThickness}px</span>
-                                </label>
-                                <input type="range" min="1" max="15" value={inkThickness} onChange={e => setInkThickness(parseInt(e.target.value))} className="w-full accent-blue-500" />
-                            </div>
-                            <div>
-                                <label className="text-xs mb-1 flex justify-between text-gray-300">
-                                    <span>Opacity</span>
-                                    <span>{Math.round(inkOpacity * 100)}%</span>
-                                </label>
-                                <input type="range" min="10" max="100" value={inkOpacity * 100} onChange={e => setInkOpacity(parseInt(e.target.value) / 100)} className="w-full accent-blue-500" />
-                            </div>
-                        </div>
-                    )}
-                </div>
-                <div className="w-px h-6 bg-[#525659] mx-1"></div>
-                
-                {customToolbarActions.map((action, idx) => (
-                    <button
-                        key={action.id || idx}
-                        type='button'
-                        onClick={action.onClick}
-                        className="px-3 py-1.5 bg-[#424649] border border-[#525659] text-gray-200 text-xs font-medium rounded hover:bg-[#525659] hover:text-white transition-colors flex items-center gap-2 cursor-pointer"
-                        title={action.tooltip || action.label}
-                    >
-                        {action.icon}
-                        {action.label}
-                    </button>
-                ))}
-
-                <button
-                    type='button'
-                    onClick={onAddStamp}
-                    className="px-3 py-1.5 bg-[#424649] border border-[#525659] text-gray-200 text-xs font-medium rounded hover:bg-[#525659] hover:text-white transition-colors flex items-center gap-2 cursor-pointer"
-                >
-                    <IconRubberStamp size={14} stroke={2} />
-                    Add Stamp
-                </button>
-                
-                {onDownload && (
-                    <button
-                        type='button'
-                        onClick={onDownload}
-                        disabled={!canDownload}
-                        className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${canDownload ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer' : 'bg-[#424649] text-gray-500 cursor-not-allowed'}`}
-                    >
-                        <IconDownload size={14} stroke={2} />
-                        Download
-                    </button>
-                )}
-            </div>
+        <div className={styles.hideOnNarrow}>
+          <PageNavigation
+            pageCount={pageCount}
+            activePageIndex={activePageIndex}
+            onGoToPage={onGoToPage}
+          />
         </div>
-    );
-};
+      </div>
+
+      {/* Zoom and page rotation */}
+      <div className={styles.groupCenter}>
+        <div className={styles.inset}>
+          <button
+            type="button"
+            onClick={() => setScale((s) => Math.max(MIN_SCALE, s - ZOOM_STEP))}
+            className={controls.iconButton}
+            title={labels.zoomOut}
+            aria-label={labels.zoomOut}
+          >
+            <IconZoomOut size={16} stroke={2} />
+          </button>
+
+          <div className={styles.zoomSelectWrap}>
+            <select
+              value={zoomMode === 'custom' ? scale.toString() : zoomMode}
+              onChange={(e) => {
+                const value = e.target.value
+                if (['auto', 'page-fit', 'page-width', 'actual-size'].includes(value)) {
+                  setZoomMode(value)
+                } else {
+                  setScale(Number.parseFloat(value))
+                }
+              }}
+              className={styles.zoomSelect}
+              aria-label={labels.zoomLevel}
+            >
+              <option value="auto">{labels.zoomAutomatic}</option>
+              <option value="actual-size">{labels.zoomActualSize}</option>
+              <option value="page-fit">{labels.zoomPageFit}</option>
+              <option value="page-width">{labels.zoomPageWidth}</option>
+              <option disabled>──────────</option>
+              {PRESET_SCALES.map((preset) => (
+                <option key={preset} value={preset}>
+                  {Math.round(preset * 100)}%
+                </option>
+              ))}
+              {isCustomScale && (
+                <option value={scale.toString()} hidden>
+                  {Math.round(scale * 100)}%
+                </option>
+              )}
+            </select>
+            <span className={styles.zoomCaret}>
+              <IconChevronDown size={14} stroke={2} />
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setScale((s) => Math.min(MAX_SCALE, s + ZOOM_STEP))}
+            className={controls.iconButton}
+            title={labels.zoomIn}
+            aria-label={labels.zoomIn}
+          >
+            <IconZoomIn size={16} stroke={2} />
+          </button>
+        </div>
+
+        <div className={`${styles.group} ${styles.hideOnMedium}`}>
+          <button
+            type="button"
+            onClick={(e) => onRotatePages(-90, e.shiftKey ? 'all' : 'page')}
+            className={controls.iconButton}
+            title={labels.rotateLeft}
+            aria-label={labels.rotateLeft}
+          >
+            <IconRotate size={16} stroke={2} />
+          </button>
+          <button
+            type="button"
+            onClick={(e) => onRotatePages(90, e.shiftKey ? 'all' : 'page')}
+            className={controls.iconButton}
+            title={labels.rotateRight}
+            aria-label={labels.rotateRight}
+          >
+            <IconRotateClockwise size={16} stroke={2} />
+          </button>
+        </div>
+      </div>
+
+      {/* Tools and actions */}
+      <div className={styles.group}>
+        <button
+          type="button"
+          onClick={onUndo}
+          disabled={!canUndo}
+          className={controls.iconButton}
+          title={labels.undo}
+          aria-label={labels.undo}
+        >
+          <IconArrowBackUp size={16} stroke={2} />
+        </button>
+        <button
+          type="button"
+          onClick={onRedo}
+          disabled={!canRedo}
+          className={controls.iconButton}
+          title={labels.redo}
+          aria-label={labels.redo}
+        >
+          <IconArrowForwardUp size={16} stroke={2} />
+        </button>
+
+        <span className={controls.divider} />
+
+        <div className={styles.split}>
+          <button
+            type="button"
+            onClick={() => setIsDrawMode(!isDrawMode)}
+            aria-pressed={isDrawMode}
+            className={`${controls.chipButton} ${styles.splitMain} ${
+              isDrawMode ? controls.active : ''
+            }`}
+            title={labels.draw}
+            aria-label={labels.draw}
+          >
+            <IconPencil size={16} stroke={2} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDrawSettings((open) => !open)}
+            aria-expanded={showDrawSettings}
+            className={`${controls.chipButton} ${styles.splitCaret} ${
+              isDrawMode ? controls.active : ''
+            }`}
+            aria-label={labels.drawSettings}
+            title={labels.drawSettings}
+          >
+            <IconChevronDown size={14} stroke={2} />
+          </button>
+
+          {showDrawSettings && (
+            <div className={styles.drawPanel}>
+              <div className={styles.drawPanelSection}>
+                <label className={controls.fieldLabel} htmlFor="rpvs-ink-color">
+                  <span>{labels.colour}</span>
+                </label>
+                <div className={styles.colorRow}>
+                  <input
+                    id="rpvs-ink-color"
+                    type="color"
+                    value={inkColor}
+                    onChange={(e) => setInkColor(e.target.value)}
+                    className={styles.colorSwatch}
+                  />
+                  <span className={styles.colorValue}>{inkColor}</span>
+                </div>
+              </div>
+
+              <div className={styles.drawPanelSection}>
+                <label className={controls.fieldLabel}>
+                  <span>{labels.thickness}</span>
+                  <span>{inkThickness}px</span>
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="15"
+                  value={inkThickness}
+                  onChange={(e) => setInkThickness(Number.parseInt(e.target.value, 10))}
+                  className={controls.range}
+                  aria-label={labels.strokeThickness}
+                />
+              </div>
+
+              <div className={styles.drawPanelSection}>
+                <label className={controls.fieldLabel}>
+                  <span>{labels.opacity}</span>
+                  <span>{Math.round(inkOpacity * 100)}%</span>
+                </label>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  value={inkOpacity * 100}
+                  onChange={(e) => setInkOpacity(Number.parseInt(e.target.value, 10) / 100)}
+                  className={controls.range}
+                  aria-label={labels.strokeOpacity}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={onAddText}
+          className={controls.chipButton}
+          title={labels.addText}
+          aria-label={labels.addText}
+        >
+          <IconTypography size={16} stroke={2} />
+        </button>
+
+        <StampMenu
+          assets={stampAssets}
+          allowUpload={allowStampUpload}
+          onAddStamp={onAddStamp}
+          onUpload={onUploadStamp}
+        />
+
+        {customToolbarActions.map((action, index) => (
+          <button
+            key={action.id || index}
+            type="button"
+            onClick={action.onClick}
+            className={controls.chipButton}
+            title={action.tooltip || action.label}
+            aria-label={action.label}
+          >
+            {/* Host actions stay icon-only when they supply one, and fall back to
+                their label when they do not, so nothing becomes unclickable. */}
+            {action.icon ?? action.label}
+          </button>
+        ))}
+
+        {onDownload && (
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={!canDownload}
+            className={controls.primaryButton}
+            title={labels.download}
+            aria-label={labels.download}
+          >
+            <IconDownload size={16} stroke={2} />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}

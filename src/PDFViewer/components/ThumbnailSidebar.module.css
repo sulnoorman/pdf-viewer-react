@@ -1,0 +1,66 @@
+.sidebar {
+  width: 148px;
+  flex: none;
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px 0;
+  background: var(--rpvs-sidebar-bg);
+  border-right: 1px solid var(--rpvs-toolbar-border);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tile {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: var(--rpvs-page-bg);
+  border: none;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--rpvs-control-bg);
+  transition: box-shadow var(--rpvs-transition);
+}
+
+.tile:hover {
+  box-shadow: inset 0 0 0 1px var(--rpvs-text-muted);
+}
+
+.tileActive {
+  box-shadow:
+    0 0 0 2px var(--rpvs-selection),
+    0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
+
+.tileActive:hover {
+  box-shadow:
+    0 0 0 2px var(--rpvs-selection),
+    0 4px 6px -1px rgb(0 0 0 / 0.3);
+}
+
+.canvas {
+  display: block;
+}
+
+.number {
+  font-size: 10px;
+  color: var(--rpvs-text-dim);
+}
+
+.numberActive {
+  color: var(--rpvs-selection);
+}

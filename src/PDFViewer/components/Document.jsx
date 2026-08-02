@@ -1,77 +1,46 @@
-import { Page } from './Page';
-import { forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
+import { memo } from 'react'
+import { Page } from './Page.jsx'
+import { useViewer } from '../context/ViewerContext.jsx'
+import { useTools } from '../context/ToolContext.jsx'
+import styles from './Document.module.css'
 
-export const Document = forwardRef(({ pdfDoc, scale, stamps, setStamps, textStamps, setTextStamps, specimenAsset, scrollContainerRef, activeStampId, setActiveStampId, onDeleteStamp, inkAnnotations, setInkAnnotations, isDrawMode, inkColor, inkThickness, inkOpacity }, ref) => {
-    const activePageIndex = useRef(0);
+/**
+ * The scrolling page column.
+ *
+ * Every page always renders its container at full size so the scrollbar is accurate
+ * from the start and cross-page drag hit-testing keeps working, but only pages inside
+ * the render window rasterise. Previously all pages rendered at once, which made a
+ * few-hundred-page document unusable.
+ */
+export function Document({ registerPage, renderWindow }) {
+  const { pdfDoc, setScrollContainer } = useViewer()
+  const { setActiveId } = useTools()
 
-    useEffect(() => {
-        if (!scrollContainerRef.current) return;
-        
-        const observer = new IntersectionObserver((entries) => {
-            let maxRatio = 0;
-            let bestIndex = activePageIndex.current;
-            entries.forEach(entry => {
-                if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
-                    maxRatio = entry.intersectionRatio;
-                    bestIndex = parseInt(entry.target.dataset.pageIndex, 10);
-                }
-            });
-            if (maxRatio > 0) {
-                activePageIndex.current = bestIndex;
-            }
-        }, {
-            root: scrollContainerRef.current,
-            threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-        });
+  return (
+    <div
+      ref={setScrollContainer}
+      className={styles.scroller}
+      // Only a click on the empty background clears the selection. Firing this for
+      // every mousedown inside the document deselected annotations that had just been
+      // selected by a pointerdown handler — stopPropagation on a pointer event does
+      // not stop the compatibility mouse event that follows it.
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) setActiveId(null)
+      }}
+    >
+      {pdfDoc &&
+        Array.from({ length: pdfDoc.numPages }, (_, i) => (
+          <MemoPage
+            key={i}
+            pageNumber={i + 1}
+            registerPage={registerPage}
+            shouldRender={renderWindow.has(i)}
+          />
+        ))}
+    </div>
+  )
+}
 
-        // We need a slight delay to ensure DOM nodes are rendered by React
-        setTimeout(() => {
-            if (scrollContainerRef.current) {
-                const pages = scrollContainerRef.current.querySelectorAll('.pdf-page-container');
-                pages.forEach(p => observer.observe(p));
-            }
-        }, 100);
-
-        return () => observer.disconnect();
-    }, [pdfDoc, scale, scrollContainerRef]);
-
-    useImperativeHandle(ref, () => ({
-        getActivePageIndex: () => activePageIndex.current
-    }));
-
-    return (
-        <div 
-            ref={scrollContainerRef} 
-            className="flex-1 overflow-auto py-8 flex flex-col relative gap-sm"
-            onMouseDown={() => setActiveStampId(null)}
-        >
-            {pdfDoc && Array.from({ length: pdfDoc.numPages }).map((_, i) => (
-                <Page
-                    key={i}
-                    pdfDoc={pdfDoc}
-                    pageNumber={i + 1}
-                    scale={scale}
-                    stamps={stamps}
-                    setStamps={setStamps}
-                    textStamps={textStamps}
-                    setTextStamps={setTextStamps}
-                    specimenAsset={specimenAsset}
-                    activeStampId={activeStampId}
-                    setActiveStampId={setActiveStampId}
-                    onDeleteStamp={onDeleteStamp}
-                    inkAnnotations={inkAnnotations[i] || []}
-                    setInkAnnotations={(updater) => {
-                        setInkAnnotations(prev => ({
-                            ...prev,
-                            [i]: typeof updater === 'function' ? updater(prev[i] || []) : updater
-                        }));
-                    }}
-                    isDrawMode={isDrawMode}
-                    inkColor={inkColor}
-                    inkThickness={inkThickness}
-                    inkOpacity={inkOpacity}
-                />
-            ))}
-        </div>
-    );
-});
+// Scrolling changes the render window, which re-renders Document. Without memo that
+// would re-render every page on every scroll tick.
+const MemoPage = memo(Page)

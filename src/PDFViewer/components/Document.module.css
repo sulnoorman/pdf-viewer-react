@@ -1,0 +1,17 @@
+.scroller {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  overflow: auto;
+  padding: 32px 0;
+
+  /*
+   * The browser keeps handling one-finger panning, but pinch is reserved for
+   * usePinchZoom — otherwise a pinch zooms the whole page instead of the document.
+   */
+  touch-action: pan-x pan-y;
+}

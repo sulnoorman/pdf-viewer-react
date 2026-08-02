@@ -1,0 +1,45 @@
+.page {
+  position: relative;
+  flex: none;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--rpvs-page-bg);
+  border: 1px solid var(--rpvs-page-border);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transform-origin: top;
+}
+
+/* Shown for pages outside the render window, which keep their size but no content. */
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #d1d5db;
+  user-select: none;
+}
+
+/* Holds the whole page — canvas, layers, annotations — and carries the viewer rotation. */
+.rotator {
+  position: absolute;
+  transform-origin: center center;
+}
+
+.raster {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+}
+
+.canvas {
+  display: block;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}

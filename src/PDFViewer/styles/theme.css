@@ -1,0 +1,71 @@
+/*
+ * Design tokens.
+ *
+ * Deliberately NOT a CSS module: the class name has to stay stable and unhashed so a
+ * consumer can theme the viewer from their own stylesheet:
+ *
+ *   .rpvs-viewer { --rpvs-accent: #7c3aed; --rpvs-toolbar-bg: #1e293b; }
+ *
+ * Everything else in the library is a hashed module, so this is the one public CSS
+ * surface. Colours used to be hardcoded hex values repeated across 103 className
+ * strings, which made theming impossible without editing every component.
+ *
+ * `:where()` keeps specificity at zero, so a consumer's plain `.rpvs-viewer` rule
+ * wins without needing !important.
+ */
+
+:where(.rpvs-viewer) {
+  /* Surfaces */
+  --rpvs-bg: #2a2a2e;
+  --rpvs-toolbar-bg: #323639;
+  --rpvs-toolbar-border: #202224;
+  --rpvs-sidebar-bg: #232326;
+  --rpvs-popover-bg: #323639;
+  --rpvs-popover-border: #525659;
+  --rpvs-inset-bg: #202224;
+  --rpvs-floating-bg: #1f2937;
+  --rpvs-floating-hover: #4b5563;
+  --rpvs-field-bg: #374151;
+
+  /* Controls */
+  --rpvs-control-bg: #424649;
+  --rpvs-control-border: #525659;
+  --rpvs-control-hover: #525659;
+
+  /* Text */
+  --rpvs-text: #e5e7eb;
+  --rpvs-text-muted: #9ca3af;
+  --rpvs-text-dim: #6b7280;
+  --rpvs-text-strong: #ffffff;
+
+  /* Accents */
+  --rpvs-accent: #2563eb;
+  --rpvs-accent-hover: #1d4ed8;
+  --rpvs-selection: #3b82f6;
+  --rpvs-danger: #ef4444;
+
+  /* Page */
+  --rpvs-page-bg: #ffffff;
+  --rpvs-page-border: #9ca3af;
+
+  /* Shape and motion */
+  --rpvs-radius: 4px;
+  --rpvs-radius-lg: 6px;
+  --rpvs-gap: 8px;
+  --rpvs-transition: 150ms ease;
+  --rpvs-font:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+
+  /*
+   * pdf.js defines this on its own `.pdfViewer` container, which this library does not
+   * render — so it has to be supplied here or the high-contrast text highlight resolves
+   * to an invalid filter. Values match pdf.js's own defaults.
+   */
+  --hcm-highlight-filter: none;
+}
+
+@media screen and (forced-colors: active) {
+  :where(.rpvs-viewer) {
+    --hcm-highlight-filter: invert(100%);
+  }
+}

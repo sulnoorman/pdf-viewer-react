@@ -1,0 +1,70 @@
+.wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.main {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right-width: 0;
+}
+
+.caret {
+  padding-left: 4px;
+  padding-right: 4px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.menu {
+  composes: popover from '../styles/controls.module.css';
+  right: 0;
+  width: 224px;
+  padding: 4px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--rpvs-gap);
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  text-align: left;
+  color: var(--rpvs-text);
+  background: transparent;
+  border: none;
+  border-radius: var(--rpvs-radius);
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--rpvs-control-hover);
+  color: var(--rpvs-text-strong);
+}
+
+.thumb {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 2px;
+}
+
+.itemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--rpvs-popover-border);
+}
+
+.hiddenInput {
+  display: none;
+}
