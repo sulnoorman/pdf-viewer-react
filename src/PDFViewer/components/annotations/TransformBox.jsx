@@ -46,6 +46,8 @@ export function TransformBox({
   opacity = 1,
   className = '',
   onSelect,
+  /** Double-click. Used by the text box to enter typing mode. */
+  onActivate,
   onCommit,
   /** Flipped while a gesture is live, so the pinch handler knows to stand down. */
   isDraggingRef,
@@ -56,9 +58,10 @@ export function TransformBox({
   const toolbarRef = useRef(null)
   const gestureRef = useRef(null)
   const [isTransforming, setIsTransforming] = useState(false)
+  const [isRotating, setIsRotating] = useState(false)
 
   /**
-   * Keep the floating toolbar upright and visually below the object.
+   * Keep the floating toolbar upright and directly below the object, on screen.
    *
    * The toolbar is a child of the rotated box, so without this it turns with the
    * object — a signature rotated 90° left its controls lying on their side, which is
@@ -66,8 +69,13 @@ export function TransformBox({
    *
    * `rotate(-total) translateY(D) translate(-50%,-50%)` reads right to left: centre
    * the bar on its anchor, push it down, then undo every rotation between here and
-   * the screen. The parent's rotation then cancels it, leaving the bar level and
-   * offset straight down no matter how the object or the page is turned.
+   * the screen. Because the anchor sits at the box centre — a point rotation does not
+   * move — and `.toolbarAnchor` pins `transform-origin` to that same point, the
+   * ancestors' rotation cancels exactly, leaving a pure downward offset. The bar is
+   * level and below the object at every angle, of the object and of the page.
+   *
+   * `D` is measured from the ROTATED bounding box, so a tall box turned on its side
+   * pushes the bar out by its width rather than overlapping a corner.
    */
   const toolbarTransform = useCallback(
     (draftRect, draftRotation) => {
@@ -144,6 +152,7 @@ export function TransformBox({
       e.currentTarget.setPointerCapture(e.pointerId)
       if (isDraggingRef) isDraggingRef.current = true
       setIsTransforming(true)
+      if (isRotate) setIsRotating(true)
     },
     [rect, rotation, onSelect, isDraggingRef]
   )
@@ -197,6 +206,7 @@ export function TransformBox({
       gestureRef.current = null
       if (isDraggingRef) isDraggingRef.current = false
       setIsTransforming(false)
+      setIsRotating(false)
 
       try {
         e.currentTarget.releasePointerCapture(e.pointerId)
@@ -235,6 +245,7 @@ export function TransformBox({
       onPointerMove={handlePointerMove}
       onPointerUp={endGesture}
       onPointerCancel={endGesture}
+      onDoubleClick={onActivate}
       // pointerdown is followed by a compatibility mousedown; without this it bubbles
       // to the page and immediately clears the selection we just made.
       onMouseDown={(e) => e.stopPropagation()}
@@ -283,7 +294,7 @@ export function TransformBox({
       {selected && toolbar && (
         <div
           ref={toolbarRef}
-          className={styles.toolbarAnchor}
+          className={`${styles.toolbarAnchor} ${isRotating ? styles.toolbarHidden : ''}`}
           style={{ transform: toolbarTransform(rect, rotation) }}
         >
           {toolbar}

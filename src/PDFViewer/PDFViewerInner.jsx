@@ -27,13 +27,34 @@ import {
 import { exportFlattenedPdf } from './utils/exportPdf.js'
 import { displayPageSize, normalizeRotation } from './utils/coords.js'
 import { deriveViewerState, sameCounts } from './utils/viewerState.js'
-import { useStampAssets, ASSET_KINDS } from './hooks/useStampAssets.js'
+import { useStampAssets, ASSET_KINDS, ASSET_SOURCES } from './hooks/useStampAssets.js'
 import { usePdfViewer } from './viewer/usePdfViewer.js'
 import { createId } from './utils/id.js'
 import { useLabels } from './context/LabelContext.jsx'
 
 /** Image stamps start this wide; the height follows the image's aspect ratio. */
 const DEFAULT_STAMP_WIDTH = 150
+
+const warnedAssets = new Set()
+
+/**
+ * A stamp image that will not load is otherwise a silent blank: an empty thumbnail in the
+ * menu and an empty box on the page, with nothing pointing at the URL.
+ *
+ * Not gated on a dev/prod flag — `import.meta.env.PROD` is substituted when *this package*
+ * is built, not the consumer's app, so such a guard removes the warning before anyone can
+ * see it. Warned once per asset, so it cannot flood a console.
+ */
+function warnAssetFailed(assetId, src) {
+  if (warnedAssets.has(assetId)) return
+  warnedAssets.add(assetId)
+  console.warn(
+    `[@armsolusi/pdf-viewer] The stamp image for "${assetId}" failed to load: ${src}\n` +
+      'Check the URL resolves from the browser. A path beginning with "/" is resolved ' +
+      'against the origin, ignoring your bundler\'s base — under a base such as ' +
+      '"/my-app/", use `${import.meta.env.BASE_URL}my-image.png` instead of "/my-image.png".'
+  )
+}
 
 /**
  * Everything below the providers.
@@ -59,8 +80,6 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
      * the Chrome-style "rotation is only for reading" behaviour.
      */
     rotateExportedPages = true,
-    /** Let the user pick their own stamp image from disk. */
-    allowStampUpload = true,
     /**
      * `{ displayActions, customToolbarActions }`, or `false` to drop the bar entirely
      * for a host that builds its own outside the viewer and drives it through the
@@ -237,10 +256,17 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
       let height = 60
       const image = new Image()
       image.src = asset.src
-      await new Promise((resolve) => {
-        image.onload = resolve
-        image.onerror = resolve
+      const loaded = await new Promise((resolve) => {
+        image.onload = () => resolve(true)
+        image.onerror = () => resolve(false)
       })
+
+      // Placed anyway — a broken image is visible in the page, whereas refusing to place
+      // one looks like the button is dead. But say so: the URL is the host's, and the
+      // usual cause is a root-relative path under a bundler `base`, which resolves
+      // against the origin instead of the deployed sub-path.
+      if (!loaded) warnAssetFailed(id, asset.src)
+
       if (image.width && image.height) {
         height = DEFAULT_STAMP_WIDTH * (image.height / image.width)
       }
@@ -508,16 +534,32 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
    * parameters to two: a new control reads what it needs from here instead of adding
    * another link in the chain.
    */
+  /*
+   * Two lists, because they are two controls.
+   *
+   * The stamp menu offers what the host configured; the image menu offers what the user
+   * brought in. Merged, the upload entry had to live behind the stamp caret, which meant
+   * every viewer showed a dropdown even with a single specimen in it.
+   */
+  const configuredAssets = useMemo(
+    () => stampAssetList.filter((asset) => asset.source !== ASSET_SOURCES.UPLOAD),
+    [stampAssetList]
+  )
+  const uploadedAssets = useMemo(
+    () => stampAssetList.filter((asset) => asset.source === ASSET_SOURCES.UPLOAD),
+    [stampAssetList]
+  )
+
   const toolbarCtx = useMemo(
     () => ({
       ...viewerState,
       api,
-      stampAssets: stampAssetList,
-      allowStampUpload,
+      configuredAssets,
+      uploadedAssets,
       onDownload,
       canDownload,
     }),
-    [viewerState, api, stampAssetList, allowStampUpload, onDownload, canDownload]
+    [viewerState, api, configuredAssets, uploadedAssets, onDownload, canDownload]
   )
 
   return (

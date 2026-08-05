@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { TransformBox } from './TransformBox.jsx'
 import { AnnotationToolbar } from './AnnotationToolbar.jsx'
 import { SUPPORTED_FONTS, resolveCssFontStack, resolveFontValue } from '../../utils/fonts.js'
@@ -16,6 +16,17 @@ export const MAX_FONT_SIZE = 72
  * Two update paths, deliberately separate:
  *   - `onCommit` — geometry from TransformBox, in SCREEN pixels, converted by Page
  *   - `onEdit`   — content and formatting, already in store units
+ *
+ * ## Why typing takes a double-click
+ *
+ * The textarea fills the box, and an editable textarea swallows pointer events to place
+ * a caret. While it was always editable the box could never be dragged at all: every
+ * press landed on the textarea, selected the annotation and ended there.
+ *
+ * So the textarea is inert until asked for, exactly as pdf.js and every canvas editor
+ * does it — one click selects and drags, a double-click starts typing, and clicking away
+ * or pressing Escape stops. A box created from the toolbar opens straight into typing,
+ * so "Add text" and host actions like "insert document number" are unaffected.
  */
 function TextStampComponent({
   annotation,
@@ -36,8 +47,29 @@ function TextStampComponent({
   const labels = useLabels()
   const fontSize = annotation.fontSize || 16
 
+  const textareaRef = useRef(null)
+  const [editing, setEditing] = useState(autoFocus)
+
+  /*
+   * Deselecting must also stop editing, or a box left in edit mode keeps swallowing the
+   * next drag. Adjusted during render rather than in an effect: this is derived state,
+   * and an effect would paint one frame with the stale value.
+   */
+  const [wasActive, setWasActive] = useState(isActive)
+  if (wasActive !== isActive) {
+    setWasActive(isActive)
+    if (!isActive) setEditing(false)
+  }
+
+  // Focus follows the mode, so a double-click puts the caret in without a second click.
+  useEffect(() => {
+    if (editing) textareaRef.current?.focus()
+    else textareaRef.current?.blur()
+  }, [editing])
+
   return (
     <TransformBox
+      onActivate={() => setEditing(true)}
       rect={screenRect}
       rotation={annotation.rotation ?? 0}
       frameRotation={frameRotation}
@@ -97,10 +129,11 @@ function TextStampComponent({
       }
     >
       <textarea
-        data-no-drag
-        // Focused straight away when created from the toolbar, so the user can type
-        // without first having to click into a box they just asked for.
-        autoFocus={autoFocus}
+        ref={textareaRef}
+        // Only a textarea in edit mode blocks dragging; the rest of the time the whole
+        // box is a drag surface.
+        {...(editing ? { 'data-no-drag': true } : {})}
+        readOnly={!editing}
         value={annotation.text}
         placeholder={labels.textPlaceholder}
         onChange={(e) => onEdit(annotation.id, { text: e.target.value })}
@@ -108,8 +141,18 @@ function TextStampComponent({
         // sentence costs one Ctrl+Z instead of one per keystroke — which would
         // otherwise flush the whole undo stack.
         onFocus={onGestureStart}
-        onBlur={onGestureEnd}
-        className={styles.textarea}
+        onBlur={() => {
+          onGestureEnd?.()
+          setEditing(false)
+        }}
+        // Escape leaves the text box without also clearing the selection, which is what
+        // the viewer-wide Escape shortcut would otherwise do.
+        onKeyDown={(e) => {
+          if (e.key !== 'Escape') return
+          e.stopPropagation()
+          setEditing(false)
+        }}
+        className={`${styles.textarea} ${editing ? styles.textareaEditing : ''}`}
         style={{
           fontSize: `${fontSize * scale}px`,
           color: annotation.color || '#000000',

@@ -8,8 +8,24 @@
   outline: none;
   resize: none;
   overflow: hidden;
-  cursor: text;
   font-family: inherit;
+
+  /*
+   * Inert until double-clicked.
+   *
+   * An editable textarea consumes the press that would have started a drag, so while
+   * this was always interactive the box could not be moved at all. Letting pointer
+   * events fall through to the TransformBox is what makes the whole surface draggable.
+   */
+  pointer-events: none;
+  cursor: move;
+  user-select: none;
+}
+
+.textareaEditing {
+  pointer-events: auto;
+  cursor: text;
+  user-select: text;
 }
 
 .textarea::placeholder {

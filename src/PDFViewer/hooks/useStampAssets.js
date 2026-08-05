@@ -11,6 +11,16 @@ export const SPECIMEN_ASSET_ID = 'specimen'
 export const ASSET_KINDS = Object.freeze({ SPECIMEN: 'specimen', STAMP: 'stamp' })
 
 /**
+ * Who supplied the image.
+ *
+ * Separate from `kind`, because they answer different questions: `kind` is what the
+ * image *means* (a signature or not) and drives `hasSpecimen`, while `source` is where
+ * it *came from* and decides which toolbar menu lists it — the stamp menu offers what
+ * the host configured, the image menu what the user brought.
+ */
+export const ASSET_SOURCES = Object.freeze({ CONFIG: 'config', UPLOAD: 'upload' })
+
+/**
  * The set of images available as stamps.
  *
  * The original API took a single `config.specimenAsset` URL, so a viewer could only
@@ -78,6 +88,7 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
       [id]: {
         id,
         kind: ASSET_KINDS.STAMP,
+        source: ASSET_SOURCES.UPLOAD,
         label: file.name,
         src: url,
         bytes,
@@ -92,6 +103,7 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
       Object.entries(assets).map(([id, asset]) => ({
         id,
         kind: asset.kind ?? ASSET_KINDS.STAMP,
+        source: asset.source ?? ASSET_SOURCES.CONFIG,
         label: asset.label ?? id,
         src: asset.src,
       })),
@@ -117,6 +129,9 @@ export function normalizeAssets(stampAssets, specimenAsset) {
       ...asset,
       id,
       kind: asset.kind === ASSET_KINDS.SPECIMEN ? ASSET_KINDS.SPECIMEN : ASSET_KINDS.STAMP,
+      // Forced, not defaulted: everything reaching here came from the host's config, so
+      // an entry claiming otherwise would put a configured image in the user's own menu.
+      source: ASSET_SOURCES.CONFIG,
       label: asset.label ?? id,
     }
   }
@@ -145,6 +160,7 @@ export function normalizeAssets(stampAssets, specimenAsset) {
       : {
           id: SPECIMEN_ASSET_ID,
           kind: ASSET_KINDS.SPECIMEN,
+          source: ASSET_SOURCES.CONFIG,
           label: 'Signature',
           src: specimenAsset,
         }

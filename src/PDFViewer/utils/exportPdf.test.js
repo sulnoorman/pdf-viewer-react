@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, vi } from 'vitest'
 import { PDFDocument, PDFDict, PDFName } from 'pdf-lib'
 import { exportFlattenedPdf } from './exportPdf.js'
 import {
@@ -109,6 +109,44 @@ describe('exportFlattenedPdf', () => {
     await expect(
       exportAndReload([createImageAnnotation({ assetId: 'nope', width: 10, height: 10 })], {})
     ).resolves.toBeTruthy()
+  })
+
+  describe('an asset that cannot be fetched', () => {
+    const remote = { sign: { src: 'https://elsewhere.example/sign.png' } }
+    const annotation = () => [createImageAnnotation({ assetId: 'sign', width: 10, height: 10 })]
+
+    it('aborts rather than silently omitting the image', async () => {
+      /*
+       * Deliberate. Returning a document that looks signed on screen but carries no
+       * signature in the file is the worst outcome a signing tool can produce.
+       */
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.reject(new TypeError('Failed to fetch')))
+      )
+      await expect(exportAndReload(annotation(), remote)).rejects.toThrow(/stamp image "sign"/)
+      vi.unstubAllGlobals()
+    })
+
+    it('names CORS, the cause invisible from the viewer', async () => {
+      // A cross-origin image the browser will happily *display* but not let script
+      // *read* looks perfectly fine right up until someone clicks Download.
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.reject(new TypeError('Failed to fetch')))
+      )
+      await expect(exportAndReload(annotation(), remote)).rejects.toThrow(/CORS/)
+      vi.unstubAllGlobals()
+    })
+
+    it('reports the status code for an HTTP error', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden' }))
+      )
+      await expect(exportAndReload(annotation(), remote)).rejects.toThrow(/403 Forbidden/)
+      vi.unstubAllGlobals()
+    })
   })
 
   it('handles every annotation type on a rotated page', async () => {

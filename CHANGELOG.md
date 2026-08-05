@@ -87,6 +87,33 @@ make now — and would have been expensive later.
 
 - `counts` now includes `specimen` and `stamp`, where `specimen + stamp === image`.
 
+### Changed after using it in a real application
+
+- **Text boxes can be moved.** They never could: the textarea filled the box and was
+  marked non-draggable, so every press on one only selected it. Following pdf.js, a single
+  click now selects and drags and a double-click starts typing; Escape or a click away
+  stops. Boxes created from the toolbar — including host actions that insert text — still
+  open straight into typing, so those flows are unchanged.
+
+- **The floating annotation toolbar hides while an object is being rotated**, and reappears
+  on release. It tracks the rotated bounding box, so during a rotate gesture it swung
+  around the object and could land under the pointer.
+
+- **That toolbar now sits directly below the object at every angle.** Its counter-rotation
+  pivoted around the bar's own centre rather than the object's, so the two rotations did
+  not cancel and the bar drifted off the bottom edge as the object turned.
+
+- **Stamps and user images are separate toolbar controls.** `stamp` places what the host
+  configured; the new `image` places what the user brings in. Merging them forced a
+  dropdown onto the stamp button even with a single specimen configured, because the
+  upload entry always had to live behind it. Now the stamp dropdown appears only when
+  there is more than one configured image.
+
+  `config.allowStampUpload` is **removed**: leave `'image'` out of
+  `toolbar.displayActions` instead, so toolbar composition stays in one place. Assets
+  gained a `source` of `'config'` or `'upload'`, which is what the two menus filter on —
+  separate from `kind`, which stays about specimen versus stamp.
+
 ### Changed — breaking
 
 - **`config.customToolbarActions` → `config.toolbar.customToolbarActions`.** Custom

@@ -110,7 +110,7 @@ export default function App() {
               // The action row only — thumbnails, page navigation and zoom stay as they
               // are. Note that Download has to be listed even though onDownload is set;
               // leaving it out hides the button.
-              displayActions: ['history', 'add-number', 'download'],
+              displayActions: [],
               customToolbarActions: [
                 {
                   id: 'add-number',

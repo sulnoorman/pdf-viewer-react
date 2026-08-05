@@ -186,6 +186,21 @@ describe('useStampAssets', () => {
       expect(result.current.assets.specimen.src).toBe('/sign.png')
     })
 
+    it('marks the upload as user-supplied, keeping it out of the stamp menu', async () => {
+      // `source` is what lets the toolbar be two controls: the stamp menu offers what
+      // the host configured, the image menu what the user brought.
+      const { result } = renderHook(() => useStampAssets({ specimenAsset: '/sign.png' }))
+
+      let id
+      await act(async () => {
+        id = await result.current.addUploadedAsset(makeFile())
+      })
+
+      expect(result.current.assets[id].source).toBe('upload')
+      expect(result.current.assets.specimen.source).toBe('config')
+      expect(result.current.list.filter((a) => a.source === 'config')).toHaveLength(1)
+    })
+
     it('registers the upload as a stamp, never as a specimen', async () => {
       // Otherwise a "must be signed" gate could be satisfied with any image at all.
       const { result } = renderHook(() => useStampAssets({}))

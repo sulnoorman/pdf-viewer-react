@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react'
-import { PDFViewer } from '../src/index.js'
+import { PDFViewer, DEFAULT_TOOLBAR_ACTIONS } from '../src/index.js'
 import { ViewerHarness, SAMPLE_SIGNATURE, panel, code } from './ViewerHarness.jsx'
 
 /**
@@ -14,13 +14,8 @@ const meta = {
   argTypes: {
     specimenAsset: {
       control: 'text',
-      description: 'Single stamp image. Registered under the asset id `default`.',
+      description: 'The signature image. Registered under the reserved id .',
       table: { category: 'Stamps' },
-    },
-    allowStampUpload: {
-      control: 'boolean',
-      description: 'Let the user pick their own image from disk.',
-      table: { category: 'Stamps', defaultValue: { summary: 'true' } },
     },
     allowMultipleStamps: {
       control: 'boolean',
@@ -47,7 +42,6 @@ const meta = {
   },
   args: {
     specimenAsset: SAMPLE_SIGNATURE,
-    allowStampUpload: true,
     allowMultipleStamps: true,
     maxStamps: 5,
     rotateExportedPages: true,
@@ -68,18 +62,25 @@ export const Default = {}
 /**
  * Exactly one signature, which is the common e-signing setup.
  *
- * With `allowMultipleStamps: false` the Add Stamp button stops adding once a stamp is
- * on the page.
+ * `allowMultipleStamps: false` stops the stamp button adding a second one, and dropping
+ * `image` from the toolbar removes the user's ability to bring in an image of their own.
+ *
+ * Note the stamp control here has **no dropdown**: with a single configured image there
+ * is nothing to choose between, so it is a plain button.
  */
 export const SingleSignature = {
-  args: { allowMultipleStamps: false, allowStampUpload: false },
+  args: {
+    allowMultipleStamps: false,
+    // Only the stamp control; no way to bring in another image.
+    toolbar: { displayActions: DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'image') },
+  },
 }
 
 /**
- * Several named stamp images plus user upload.
+ * Several named stamp images.
  *
  * `stampAssets` accepts a map or a list; the list form lets you label each entry, which
- * is what the stamp menu shows.
+ * is what the stamp menu shows. With more than one, the stamp control grows a dropdown.
  */
 export const MultipleStampAssets = {
   args: {
@@ -94,11 +95,12 @@ export const MultipleStampAssets = {
 /**
  * No stamp images configured at all.
  *
- * The Add Stamp button explains itself rather than silently doing nothing — but the
- * user can still upload their own, so the viewer stays useful.
+ * The stamp button is disabled and says why rather than silently doing nothing. The
+ * image control beside it is unaffected — a user can still bring in their own signature,
+ * so the viewer stays useful with no configuration whatsoever.
  */
 export const UploadOnly = {
-  args: { specimenAsset: undefined, allowStampUpload: true },
+  args: { specimenAsset: undefined },
 }
 
 /**

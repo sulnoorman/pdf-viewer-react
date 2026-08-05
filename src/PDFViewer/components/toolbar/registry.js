@@ -14,6 +14,7 @@ import {
   DrawTool,
   AddTextButton,
   StampItem,
+  ImageItem,
   DownloadButton,
 } from './items.jsx'
 
@@ -47,6 +48,7 @@ export const TOOLBAR_REGISTRY = Object.freeze({
   draw: { zone: 'right', Component: DrawTool },
   addText: { zone: 'right', Component: AddTextButton },
   stamp: { zone: 'right', Component: StampItem },
+  image: { zone: 'right', Component: ImageItem },
   download: { zone: 'right', Component: DownloadButton },
 })
 
@@ -75,5 +77,6 @@ export const DEFAULT_TOOLBAR_ACTIONS = Object.freeze([
   'draw',
   'addText',
   'stamp',
+  'image',
   'download',
 ])

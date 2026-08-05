@@ -69,8 +69,7 @@ async function embedAssets(pdfDoc, annotations, assets) {
     if (!asset) continue
 
     const source = typeof asset === 'string' ? asset : asset.src
-    const bytes =
-      asset?.bytes ?? (source ? await fetch(source).then((res) => res.arrayBuffer()) : null)
+    const bytes = asset?.bytes ?? (source ? await fetchAssetBytes(assetId, source) : null)
     if (!bytes) continue
 
     const isPng =
@@ -81,6 +80,42 @@ async function embedAssets(pdfDoc, annotations, assets) {
   }
 
   return embedded
+}
+
+/**
+ * Read a stamp image's bytes, failing loudly and specifically.
+ *
+ * Export deliberately aborts rather than dropping an image it cannot fetch: handing back
+ * a document that looks signed on screen but has no signature in the file is the worst
+ * possible outcome for a signing tool.
+ *
+ * What it must not do is abort with a bare "Failed to fetch". The two causes are worth
+ * naming, because neither is visible from the viewer: a cross-origin image whose server
+ * sends no CORS headers can be *displayed* by the browser but not *read* by script, so
+ * the stamp looks perfectly fine right up until the moment someone clicks Download.
+ */
+async function fetchAssetBytes(assetId, source) {
+  let response
+  try {
+    response = await fetch(source)
+  } catch (cause) {
+    throw new Error(
+      `Could not read the stamp image "${assetId}" from ${source}. ` +
+        'If it is on another domain, that server must send CORS headers — a browser will ' +
+        'display such an image but refuses to let script read its bytes. Hosting the image ' +
+        'in your own app avoids this entirely.',
+      { cause }
+    )
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Could not read the stamp image "${assetId}" from ${source} ` +
+        `(${response.status} ${response.statusText}).`
+    )
+  }
+
+  return response.arrayBuffer()
 }
 
 /** Embed each standard font at most once per document. */

@@ -58,8 +58,10 @@ export const DEFAULT_LABELS = Object.freeze({
   /* Stamps and text */
   addStamp: 'Add stamp',
   chooseStamp: 'Choose stamp image',
-  uploadImage: 'Upload image…',
   noStampConfigured: 'No stamp image configured',
+  addImage: 'Add your own image',
+  chooseImage: 'Choose an image you added',
+  uploadImage: 'Upload another image…',
   addText: 'Add a text box',
   textPlaceholder: 'Type here…',
   fontSize: 'Font size',

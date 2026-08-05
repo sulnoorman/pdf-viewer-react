@@ -172,6 +172,7 @@ export type ToolbarActionId =
   | 'draw'
   | 'addText'
   | 'stamp'
+  | 'image'
   | 'download'
   | 'divider'
   | 'spacer'
@@ -235,10 +236,12 @@ export interface PDFViewerConfig {
    * uploaded is an image annotation just the same, but neither satisfies it.
    */
   specimenAsset?: string
-  /** Several stamp images, as a map or a list. */
+  /**
+   * Several stamp images, as a map or a list. These are what the `stamp` control offers;
+   * images the user adds themselves live behind the separate `image` control, which you
+   * remove by dropping `'image'` from `toolbar.displayActions`.
+   */
   stampAssets?: Record<string, string | StampAsset> | StampAsset[]
-  /** Whether the user may add their own image from disk. Defaults to true. */
-  allowStampUpload?: boolean
   /** Cap on image stamps; `false` allows exactly one. Defaults to true. */
   allowMultipleStamps?: boolean
   /** Maximum image stamps when `allowMultipleStamps` is true. */

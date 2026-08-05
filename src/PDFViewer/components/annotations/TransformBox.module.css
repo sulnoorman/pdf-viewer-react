@@ -75,9 +75,29 @@
   cursor: grab;
 }
 
-/* Anchored at the box centre; TransformBox supplies the counter-rotating transform. */
+/*
+ * Anchored at the box centre; TransformBox supplies the counter-rotating transform.
+ *
+ * `transform-origin` must be that same centre point, not the bar's own middle. With the
+ * default `center`, the counter-rotation pivots around the toolbar itself, so the
+ * ancestors' rotation no longer cancels to a pure translation and the bar drifts off the
+ * bottom edge as the object turns. `0 0` is the anchor's own top-left, which sits exactly
+ * on the box centre.
+ */
 .toolbarAnchor {
   position: absolute;
   left: 50%;
   top: 50%;
+  transform-origin: 0 0;
+}
+
+/*
+ * Hidden while the object is being rotated.
+ *
+ * The bar tracks the rotated bounding box, so during a rotate gesture it slides in and
+ * out and swings around the object — distracting, and it can end up under the pointer.
+ * Visibility rather than display, so it does not have to be re-laid out on release.
+ */
+.toolbarHidden {
+  visibility: hidden;
 }

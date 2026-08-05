@@ -44,18 +44,27 @@ if (generated !== stable) {
   await rename(resolve(root, generated), resolve(root, stable))
 }
 
+const tarballPath = resolve(root, stable).replace(/\\/g, '/')
+
 console.log(`
 Built ${stable} (v${pkg.version})
 
 Install it in another app:
 
-  bun add ${resolve(root, stable).replace(/\\/g, '/')}
+  bun add ${tarballPath}
   # or: npm install <that path>
 
-Then use it exactly as the README describes — this is the published package, not a
-source alias, so anything broken about packaging shows up here.
+Use it exactly as the README describes — this is the published package, not a source
+alias, so anything broken about packaging shows up here. Do NOT install the directory
+(\`bun add ../pdf-stamper-app\`): that copies the whole repo, node_modules included, and
+ignores the \`files\` field.
 
-Re-run this after every change; the consuming app needs a reinstall to pick it up:
+RE-INSTALLING after a rebuild takes one extra step. Bun caches a tarball by its path, and
+on Windows the re-extract fails with ENOTEMPTY because it cannot rename over the existing
+cache entry — \`--force\` does not help. Delete the entry instead, and stop the consuming
+app's dev server first, or it will keep serving its pre-bundled copy:
 
-  bun add ${stable} --force
+  rm -rf ~/.bun/install/cache/@T@*
+  rm -rf node_modules/@armsolusi node_modules/.vite
+  bun add ${tarballPath}
 `)

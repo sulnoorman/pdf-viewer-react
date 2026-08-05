@@ -129,6 +129,29 @@ have set `GlobalWorkerOptions` globally, that is respected too.
 **Next.js.** The viewer must be client-side: add `'use client'` and load it with
 `dynamic(() => import('./Viewer'), { ssr: false })`.
 
+## Asset URLs and `base`
+
+`specimenAsset`, `stampAssets` and `src` are URLs your browser fetches, not module
+imports, so your bundler never rewrites them.
+
+That matters if your app is served under a sub-path. With Vite's `base: '/my-app/'`, a
+file in `public/assets/` is served at `/my-app/assets/…`, but `'/assets/sign.png'`
+resolves against the **origin** and 404s:
+
+```jsx
+specimenAsset: `${import.meta.env.BASE_URL}assets/sign.png`  // BASE_URL ends in a slash
+```
+
+Importing the image instead is the sturdier option, because the bundler then owns the URL:
+
+```jsx
+import signature from './assets/sign.png'   // from src/, not public/
+config={{ specimenAsset: signature }}
+```
+
+A stamp image that fails to load leaves a blank thumbnail in the menu and an empty box on
+the page, so the viewer logs a warning naming the asset and its URL.
+
 ## `src`
 
 Accepts a URL string, `File`, `Blob`, `ArrayBuffer` or `Uint8Array`. The bytes are read
@@ -153,7 +176,6 @@ depend on a URL still being reachable.
 | `workerPort` | `Worker` | — | A Worker you built yourself; wins over `workerSrc` |
 | `specimenAsset` | `string` | — | The signature image; the only thing `hasSpecimen` counts |
 | `stampAssets` | `Record<string, string \| StampAsset> \| StampAsset[]` | — | Several stamp images |
-| `allowStampUpload` | `boolean` | `true` | Let the user add an image from disk |
 | `allowMultipleStamps` | `boolean` | `true` | `false` allows exactly one image stamp |
 | `maxStamps` | `number \| null` | `null` | Cap on image stamps |
 | `labels` | `ViewerLabels` | English | Override any UI string |
@@ -302,9 +324,21 @@ those, replace the whole bar with `renderToolbar`.
 
 ### Action ids
 
-`history`, `draw`, `addText`, `stamp`, `download`.
+`history`, `draw`, `addText`, `stamp`, `image`, `download`.
 
 `history` is a cluster; use `undo` and `redo` to place its halves separately.
+
+**`stamp` and `image` are separate on purpose.** `stamp` places one of the images *you*
+configured through `specimenAsset` and `stampAssets`; `image` lets the *user* bring in
+one of their own. Because uploading is no longer hidden behind the stamp control's
+dropdown, that dropdown appears only when there is genuinely a choice — configure a
+single specimen and you get a plain button, not a menu with one entry in it.
+
+To forbid users adding their own images, leave `image` out:
+
+```jsx
+toolbar: { displayActions: DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'image') }
+```
 
 `divider` and `spacer` may appear as often as you like. One stranded at either end of the
 row is dropped rather than left dangling against the edge.

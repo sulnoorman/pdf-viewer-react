@@ -14,6 +14,7 @@ import { useTools } from '../../context/ToolContext.jsx'
 import { MIN_SCALE, MAX_SCALE } from '../../hooks/useZoom.js'
 import { PageNavigation } from '../PageNavigation.jsx'
 import { StampMenu } from '../StampMenu.jsx'
+import { ImageMenu } from '../ImageMenu.jsx'
 import controls from '../../styles/controls.module.css'
 import styles from '../Toolbar.module.css'
 
@@ -338,11 +339,16 @@ export function AddTextButton({ ctx }) {
   )
 }
 
+/** Stamps the host configured. */
 export function StampItem({ ctx }) {
+  return <StampMenu assets={ctx.configuredAssets} onAddStamp={ctx.api.addImageStamp} />
+}
+
+/** Images the user brings in themselves. */
+export function ImageItem({ ctx }) {
   return (
-    <StampMenu
-      assets={ctx.stampAssets}
-      allowUpload={ctx.allowStampUpload}
+    <ImageMenu
+      uploaded={ctx.uploadedAssets}
       onAddStamp={ctx.api.addImageStamp}
       onUpload={ctx.api.uploadStamp}
     />
