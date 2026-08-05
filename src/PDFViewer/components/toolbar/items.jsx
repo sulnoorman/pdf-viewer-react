@@ -11,6 +11,7 @@ import IconLayoutSidebar from '@tabler/icons-react/dist/esm/icons/IconLayoutSide
 import IconRotate from '@tabler/icons-react/dist/esm/icons/IconRotate.mjs'
 import IconRotateClockwise from '@tabler/icons-react/dist/esm/icons/IconRotateClockwise.mjs'
 import { useTools } from '../../context/ToolContext.jsx'
+import { usePopoverAlign, alignClass } from '../../hooks/usePopoverAlign.js'
 import { MIN_SCALE, MAX_SCALE } from '../../hooks/useZoom.js'
 import { PageNavigation } from '../PageNavigation.jsx'
 import { StampMenu } from '../StampMenu.jsx'
@@ -241,6 +242,7 @@ export function DrawTool({ ctx }) {
     setInkOpacity,
   } = useTools()
   const [showSettings, setShowSettings] = useState(false)
+  const [measurePanel, panelAlign] = usePopoverAlign()
   const { labels } = ctx
 
   return (
@@ -271,7 +273,7 @@ export function DrawTool({ ctx }) {
       </button>
 
       {showSettings && (
-        <div className={styles.drawPanel}>
+        <div ref={measurePanel} className={`${styles.drawPanel} ${controls[alignClass(panelAlign)]}`}>
           <div className={styles.drawPanelSection}>
             <label className={controls.fieldLabel} htmlFor="rpvs-ink-color">
               <span>{labels.colour}</span>

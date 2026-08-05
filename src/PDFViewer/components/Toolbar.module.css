@@ -94,9 +94,9 @@
   border-bottom-left-radius: 0;
 }
 
+/* No `left`/`right` here — usePopoverAlign picks the side. See controls.module.css. */
 .drawPanel {
   composes: popover from '../styles/controls.module.css';
-  left: 0;
   width: 192px;
   padding: 12px;
 }

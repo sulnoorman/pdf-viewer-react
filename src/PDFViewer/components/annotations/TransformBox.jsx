@@ -48,6 +48,12 @@ export function TransformBox({
   onSelect,
   /** Double-click. Used by the text box to enter typing mode. */
   onActivate,
+  /**
+   * A move, resize or rotate is beginning. The text box uses this to leave typing mode:
+   * resizing while the caret was still in the box left the textarea swallowing pointer
+   * events, so the object could not be dragged afterwards until you clicked away.
+   */
+  onTransformStart,
   onCommit,
   /** Flipped while a gesture is live, so the pinch handler knows to stand down. */
   isDraggingRef,
@@ -126,8 +132,25 @@ export function TransformBox({
         return
       }
 
+      /*
+       * The browser has its own idea of what a press-and-drag means, and it wins.
+       *
+       * A drag across the page leaves a text selection in pdf.js's text layer. Press on
+       * top of that selection and the browser starts a native drag-and-drop of it —
+       * which replaces pointermove/pointerup with drag events entirely, so this gesture
+       * never received another event and the object simply would not move. It looked
+       * like a bug "after resizing", because resizing is what left the selection behind;
+       * clicking elsewhere cleared it, which is why that appeared to fix things.
+       *
+       * preventDefault on pointerdown suppresses the native drag and the selection that
+       * feeds it. Reached only once a real gesture is starting — a press on a
+       * `data-no-drag` child has already returned above, so typing and selecting inside
+       * a text box are untouched.
+       */
+      e.preventDefault()
       e.stopPropagation()
       onSelect?.()
+      onTransformStart?.()
 
       const node = nodeRef.current
       if (!node) return
@@ -154,7 +177,7 @@ export function TransformBox({
       setIsTransforming(true)
       if (isRotate) setIsRotating(true)
     },
-    [rect, rotation, onSelect, isDraggingRef]
+    [rect, rotation, onSelect, onTransformStart, isDraggingRef]
   )
 
   const handlePointerMove = useCallback(
@@ -246,6 +269,10 @@ export function TransformBox({
       onPointerUp={endGesture}
       onPointerCancel={endGesture}
       onDoubleClick={onActivate}
+      // Belt and braces for the same problem: whatever the browser thinks is draggable
+      // here — a selection, an image, a link in the annotation layer beneath — it is not
+      // allowed to start a native drag and take the pointer stream with it.
+      onDragStart={(e) => e.preventDefault()}
       // pointerdown is followed by a compatibility mousedown; without this it bubbles
       // to the page and immediately clears the selection we just made.
       onMouseDown={(e) => e.stopPropagation()}

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
+import { devWorkerPlugin } from './scripts/dev-worker-plugin.mjs'
 
 // `vite` (dev/preview) serves the demo app in index.html + src/main.jsx.
 // `vite build` produces the distributable library from src/index.js.
@@ -9,7 +10,9 @@ import { fileURLToPath, URL } from 'node:url'
 // Tailwind is used by the DEMO ONLY (src/App.css). The library itself must never
 // require the consumer to have Tailwind configured — see docs/ARCHITECTURE.md.
 export default defineConfig(({ command }) => ({
-  plugins: [react(), tailwindcss()],
+  // devWorkerPlugin only applies to `vite`/`vite preview`; the worker lives in dist/ for
+  // real consumers, and nowhere in src/. See scripts/dev-worker-plugin.mjs.
+  plugins: [react(), tailwindcss(), devWorkerPlugin()],
 
   // public/ holds demo fixtures (sample PDF, signature image). Copying them into
   // dist/ would ship them inside the published tarball, so only serve them in dev.

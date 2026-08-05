@@ -59,12 +59,21 @@ alias, so anything broken about packaging shows up here. Do NOT install the dire
 (\`bun add ../pdf-stamper-app\`): that copies the whole repo, node_modules included, and
 ignores the \`files\` field.
 
-RE-INSTALLING after a rebuild takes one extra step. Bun caches a tarball by its path, and
-on Windows the re-extract fails with ENOTEMPTY because it cannot rename over the existing
-cache entry — \`--force\` does not help. Delete the entry instead, and stop the consuming
-app's dev server first, or it will keep serving its pre-bundled copy:
+RE-INSTALLING after a rebuild, in the consuming app:
 
+  # 1. stop its dev server, or it keeps serving the pre-bundled copy it already has
   rm -rf ~/.bun/install/cache/@T@*
   rm -rf node_modules/@armsolusi node_modules/.vite
-  bun add ${tarballPath}
+  bun add <the SAME path string already in your package.json>
+
+Three things bite here, all of them silent:
+
+  * Bun keys its cache by the tarball path and, on Windows, cannot rename over the
+    existing entry — the re-extract fails with ENOTEMPTY and \`--force\` does not help.
+    Deleting the cache entry is what forces a fresh extract.
+  * Bun stores the specifier verbatim, so "${tarballPath}" and a relative path to the
+    same file are two different packages with one name: DependencyLoop. Reuse whatever
+    string package.json already holds, or \`bun remove\` first.
+  * A running dev server holds its own pre-bundled copy in memory, so clearing
+    node_modules/.vite underneath it changes nothing.
 `)

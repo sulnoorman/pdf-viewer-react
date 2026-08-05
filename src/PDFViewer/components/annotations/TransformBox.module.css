@@ -2,8 +2,18 @@
   position: absolute;
   transform-origin: center center;
   cursor: move;
-  touch-action: none;
   z-index: 10;
+
+  /*
+   * The browser must not treat a gesture here as one of its own.
+   *
+   * `touch-action` stops it turning a touch drag into a scroll or a pinch;
+   * `user-select` stops a mouse drag becoming a text selection, which is what fed the
+   * native drag-and-drop that used to swallow the entire pointer stream. Text boxes opt
+   * back in while editing — see TextStamp.module.css.
+   */
+  touch-action: none;
+  user-select: none;
 }
 
 .boxSelected {

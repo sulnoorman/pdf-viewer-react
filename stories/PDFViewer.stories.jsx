@@ -14,7 +14,9 @@ const meta = {
   argTypes: {
     specimenAsset: {
       control: 'text',
-      description: 'The signature image. Registered under the reserved id .',
+      description:
+        'The signature image, registered under the reserved id `specimen`. The only ' +
+        'thing `hasSpecimen` counts.',
       table: { category: 'Stamps' },
     },
     allowMultipleStamps: {
@@ -148,7 +150,9 @@ export const Localised = {
       opacity: 'Transparansi',
       addStamp: 'Tambah stempel',
       chooseStamp: 'Pilih gambar stempel',
-      uploadImage: 'Unggah gambar…',
+      addImage: 'Tambah gambar sendiri',
+      chooseImage: 'Pilih gambar yang sudah ditambahkan',
+      uploadImage: 'Unggah gambar lain…',
       addText: 'Tambah kotak teks',
       textPlaceholder: 'Ketik di sini…',
       fontSize: 'Ukuran font',
@@ -209,4 +213,63 @@ function CustomActionsDemo(args) {
       </div>
     </ViewerHarness>
   )
+}
+
+/**
+ * **Working with objects on the page.**
+ *
+ * A few of these are not guessable, so they are worth trying here before you write help
+ * text for your own users.
+ *
+ * - **Move** — drag it. Anywhere on the object, text boxes included.
+ * - **Edit text** — **double-click** the box. `Escape` or a click away stops.
+ *   A box you have just created skips this and opens ready to type.
+ * - **Resize** — drag a corner or edge handle.
+ * - **Rotate** — drag the round handle above the object; hold `Shift` to snap to 15°.
+ *   The small toolbar hides while you turn and comes back on release.
+ * - **Across pages** — drag an object onto another page and it is reassigned to it.
+ *
+ * Text takes a double-click because a single click drags — the same trade pdf.js and
+ * every canvas editor makes. Undo covers all of it, one step per gesture.
+ */
+export const Interactions = {
+  render: (args) => (
+    <ViewerHarness {...args}>
+      <div style={panel}>
+        Try: add a text box, click elsewhere to deselect, then drag it. Double-click to
+        type again. Rotate it and watch the toolbar step out of the way.
+      </div>
+    </ViewerHarness>
+  ),
+}
+
+/**
+ * **Stamps and images are two separate controls.**
+ *
+ * The stamp button places what *you* configured through `specimenAsset` and
+ * `stampAssets`. The image button beside it lets the *user* bring in their own — it
+ * opens a file picker, and anything they add collects behind its caret so it can be
+ * placed again without picking the file twice.
+ *
+ * They used to be one control, which forced a dropdown onto the stamp button even with a
+ * single signature configured, because the upload entry always had to live behind it.
+ * Here there are two configured stamps, so the stamp dropdown is genuinely useful —
+ * compare with **Single signature**, where it is a plain button.
+ *
+ * Only stamps placed from `specimenAsset` count towards `hasSpecimen`; a seal and an
+ * uploaded image do not. See **Integration → Specimen vs Annotation**.
+ */
+export const StampsAndImages = {
+  args: {
+    stampAssets: [{ id: 'seal', label: 'Approved seal', src: SAMPLE_SIGNATURE }],
+  },
+  render: (args) => (
+    <ViewerHarness {...args}>
+      <div style={panel}>
+        Stamp button: the signature and the seal. Image button: whatever you upload. To
+        forbid uploads entirely, drop <code style={code}>&apos;image&apos;</code> from{' '}
+        <code style={code}>displayActions</code>.
+      </div>
+    </ViewerHarness>
+  ),
 }

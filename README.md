@@ -129,6 +129,55 @@ have set `GlobalWorkerOptions` globally, that is respected too.
 **Next.js.** The viewer must be client-side: add `'use client'` and load it with
 `dynamic(() => import('./Viewer'), { ssr: false })`.
 
+## How the viewer is used
+
+Worth knowing before you write help text for your own users, because a few of these are
+not guessable.
+
+**Placing things**
+
+| | |
+| --- | --- |
+| Stamp | Click the stamp button. With several configured, use the dropdown beside it. |
+| Your own image | Click the image button; it opens a file picker straight away. |
+| Text | Click the text button. The new box opens ready to type. |
+| Freehand | Click the pencil to enter draw mode, then draw. Click it again to leave. The caret beside it sets colour, thickness and opacity. |
+
+**Working with something already on the page**
+
+| | |
+| --- | --- |
+| Select | Click it. |
+| Move | Drag it — anywhere on the object, including text boxes. |
+| Resize | Drag a corner or edge handle. |
+| Rotate | Drag the round handle above it. Hold `Shift` to snap to 15°. |
+| **Edit text** | **Double-click the box.** `Escape` or a click away stops. |
+| Change colour, size, opacity | Use the small toolbar that appears below the selection. |
+
+A text box takes a double-click to edit because a single click drags it — the same trade
+pdf.js and every canvas editor makes. A box that was just created skips this and opens
+straight into typing, so "add text" and host actions that insert text are unaffected.
+
+Objects can be dragged **across page boundaries**; they are reassigned to whichever page
+they end up over.
+
+**Keyboard**
+
+| Keys | Action |
+| --- | --- |
+| `Ctrl/Cmd` `+` / `-` / `0` | Zoom in, out, reset |
+| `Ctrl/Cmd` + wheel, or trackpad pinch | Zoom to pointer |
+| `Ctrl/Cmd` `Z` / `Y` | Undo / redo |
+| `Ctrl/Cmd` `D` | Duplicate selection |
+| `Ctrl/Cmd` `C` / `V` | Copy / paste |
+| `Delete` / `Backspace` | Delete selection |
+| `Escape` | Deselect, or stop editing text |
+| `Shift` while rotating | Snap to 15° |
+| `Shift` while clicking page rotate | Rotate every page |
+
+Undo covers everything — placing, moving, resizing, rotating, typing, drawing, deleting.
+A whole drag is one step, and a typing session is one step rather than one per keystroke.
+
 ## Asset URLs and `base`
 
 `specimenAsset`, `stampAssets` and `src` are URLs your browser fetches, not module
@@ -166,7 +215,8 @@ depend on a URL still being reachable.
 | --- | --- | --- |
 | `src` | `string \| File \| Blob \| ArrayBuffer \| Uint8Array` | The document |
 | `config` | `PDFViewerConfig` | See below |
-| `ref` | `Ref<PDFViewerHandle>` | Imperative API |
+| `viewer` | `PdfViewerHandle` | From `usePdfViewer()`. How to read state and drive it |
+| `ref` | `Ref<PDFViewerHandle>` | The older, smaller door onto the same API |
 
 ### `config`
 
@@ -414,18 +464,6 @@ await fetch('/api/annotations', {
   body: JSON.stringify(viewer.getAnnotations()),
 })
 ```
-
-## Keyboard
-
-| Keys | Action |
-| --- | --- |
-| `Ctrl/Cmd` `+` / `-` / `0` | Zoom in, out, reset |
-| `Ctrl/Cmd` + wheel or pinch | Zoom to pointer |
-| `Ctrl/Cmd` `Z` / `Y` | Undo / redo |
-| `Ctrl/Cmd` `D` | Duplicate selection |
-| `Ctrl/Cmd` `C` / `V` | Copy / paste |
-| `Delete` / `Backspace` | Delete selection |
-| `Escape` | Deselect |
 
 ## Localisation
 

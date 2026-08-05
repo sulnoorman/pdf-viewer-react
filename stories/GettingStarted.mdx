@@ -109,6 +109,35 @@ A URL string, `File`, `Blob`, `ArrayBuffer` or `Uint8Array`. The bytes are read 
 reused for export, so a file picked straight from a file input works, and exporting does
 not depend on the URL still being reachable.
 
+Note that `src`, `specimenAsset` and `stampAssets` are URLs the **browser** fetches, not
+module imports, so your bundler never rewrites them. If your app is served under a
+sub-path, a leading `/` resolves against the origin and 404s — use
+`` `${import.meta.env.BASE_URL}assets/sign.png` ``, or import the image so the bundler
+owns the URL.
+
+## How your users will drive it
+
+Two of these are not guessable, so they are worth knowing before you write your own help
+text. **PDFViewer → Interactions** is a live playground for all of them.
+
+- **Move** — drag it, anywhere on the object, text boxes included
+- **Edit text** — **double-click** the box; `Escape` or a click away stops. A box that
+  was just created opens ready to type, so "add text" needs no double-click
+- **Resize** — drag a corner or edge handle
+- **Rotate** — drag the round handle above the object; `Shift` snaps to 15°
+- **Across pages** — drag an object onto another page and it is reassigned to it
+- **Undo** covers everything, one step per gesture — a whole drag, or a whole typing
+  session, rather than one step per keystroke
+
+## Stamps and images are separate
+
+The **stamp** control places images *you* configured (`specimenAsset`, `stampAssets`);
+the **image** control lets the *user* bring in their own. Only stamps from `specimenAsset`
+count towards `hasSpecimen` — a seal or an uploaded photo does not, which is what makes
+"has this actually been signed?" answerable.
+
+Drop `'image'` from `toolbar.displayActions` to forbid user uploads.
+
 ## About the sample document
 
 The PDF in these stories is generated, not a real file, and is deliberately awkward:
@@ -123,8 +152,12 @@ overflow on page 3.
 
 ## Where to look next
 
-- **PDFViewer → Basic** — the options, as live controls
+- **PDFViewer → Basic** — every option as a live control, plus **Interactions** and
+  **Stamps and images**
 - **Integration** — gating a Submit button, `hasSpecimen` vs `hasAnnotation`, uploading
   instead of downloading, reading annotations as data
 - **Customisation** — the toolbar (which controls appear, replacing one, replacing the
   whole bar), theming with CSS custom properties, translating the UI
+
+Every page here is the real component, not a screenshot — the controls in the **Controls**
+tab change a live viewer, and the code shown in **Show code** is what produced it.

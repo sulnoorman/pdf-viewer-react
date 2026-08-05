@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build
+
+      # Catches packaging mistakes an ordinary build cannot: a broken exports map, a
+      # `types` entry pointing nowhere, a `files` list that leaves out the stylesheet.
+      - run: bunx publint
+
+      # The type declarations are hand-written, so nothing else proves they compile.
+      # A consumer on `strict` is the only audience that matters here.
+      - name: Typecheck the declarations
+        run: |
+          cat > /tmp/consumer.tsx <<'EOF'
+          import { PDFViewer, usePdfViewer, useViewerState, DEFAULT_TOOLBAR_ACTIONS } from './dist/index'
+          import type { Annotation, PdfViewerHandle } from './dist/index'
+
+          const viewer: PdfViewerHandle = usePdfViewer()
+          const signed: boolean = useViewerState(viewer, (s) => s.hasSpecimen)
+
+          const describe = (a: Annotation): string =>
+            a.type === 'image' ? a.assetId : a.type === 'text' ? a.text : String(a.points.length)
+
+          export const el = (
+            <PDFViewer
+              viewer={viewer}
+              src="/a.pdf"
+              config={{
+                specimenAsset: '/sign.png',
+                toolbar: { displayActions: DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'image') },
+              }}
+            />
+          )
+          export { signed, describe }
+          EOF
+          cp /tmp/consumer.tsx ./consumer-typecheck.tsx
+          bunx tsc --noEmit --strict --jsx react-jsx \
+            --moduleResolution bundler --module esnext --target es2022 \
+            consumer-typecheck.tsx
+          rm -f consumer-typecheck.tsx
+
+      # The published bundle must never carry the 1.2 MB worker inline. Vite library mode
+      # inlines assets and ignores assetsInlineLimit, so one stray `?url` import would do
+      # it — and the only visible symptom is a package fifteen times too big.
+      - name: Guard the bundle size
+        run: |
+          size=$(stat -c%s dist/pdf-viewer.js)
+          echo "dist/pdf-viewer.js is $size bytes"
+          test "$size" -lt 200000 || { echo "Bundle far larger than expected — worker inlined?"; exit 1; }
+          test -f dist/pdf.worker.min.mjs || { echo "Bundled worker missing from dist/"; exit 1; }
+          test ! -d dist/assets || { echo "dist/assets/ should not exist — duplicate worker?"; exit 1; }

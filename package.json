@@ -57,9 +57,10 @@
     "test:watch": "vitest",
     "fixture": "bun scripts/make-fixture.mjs",
     "css:extract": "bun scripts/extract-pdfjs-css.mjs",
-    "prepublishOnly": "bun run lint && bun run test && bun run build",
+    "prepublishOnly": "bun run lint && bun run test && bun run build && bunx publint",
     "pack:check": "npm pack --dry-run",
     "pack:local": "bun run build && bun scripts/pack-local.mjs",
+    "release:git": "bun scripts/release-git.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

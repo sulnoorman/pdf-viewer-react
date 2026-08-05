@@ -70,6 +70,7 @@ function TextStampComponent({
   return (
     <TransformBox
       onActivate={() => setEditing(true)}
+      onTransformStart={() => setEditing(false)}
       rect={screenRect}
       rotation={annotation.rotation ?? 0}
       frameRotation={frameRotation}

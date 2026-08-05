@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import IconChevronDown from '@tabler/icons-react/dist/esm/icons/IconChevronDown.mjs'
 import controls from '../styles/controls.module.css'
 import styles from './SplitMenu.module.css'
+import { usePopoverAlign, alignClass } from '../hooks/usePopoverAlign.js'
 
 /**
  * A primary action with an optional dropdown beside it.
@@ -35,6 +36,7 @@ export function SplitMenu({
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
+  const [measureMenu, menuAlign] = usePopoverAlign()
 
   // A menu that only closes when you pick something is a trap on touch devices.
   useEffect(() => {
@@ -82,7 +84,7 @@ export function SplitMenu({
       )}
 
       {open && hasMenu && (
-        <div className={styles.menu}>
+        <div ref={measureMenu} className={`${styles.menu} ${controls[alignClass(menuAlign)]}`}>
           {items.map((item) => (
             <button
               key={item.id}
