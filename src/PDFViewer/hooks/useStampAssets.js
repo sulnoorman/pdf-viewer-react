@@ -2,6 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createId } from '../utils/id.js'
 
 /**
+ * The id `config.specimenAsset` is registered under. Reserved: a host entry using this
+ * id is treated as a specimen too rather than colliding with the configured one.
+ */
+export const SPECIMEN_ASSET_ID = 'specimen'
+
+/** What an asset means to the host, which is what `hasSpecimen` is derived from. */
+export const ASSET_KINDS = Object.freeze({ SPECIMEN: 'specimen', STAMP: 'stamp' })
+
+/**
  * The set of images available as stamps.
  *
  * The original API took a single `config.specimenAsset` URL, so a viewer could only
@@ -13,8 +22,12 @@ import { createId } from '../utils/id.js'
  *   - `{ seal: '/seal.png', sign: '/sign.png' }`
  *   - `[{ id: 'seal', label: 'Company seal', src: '/seal.png' }]`
  *
+ * Every entry carries a `kind`. Without it "has the document been signed?" is
+ * unanswerable: a seal, a user's uploaded doodle and the configured specimen all
+ * produce the same image annotation, so counting images cannot tell them apart.
+ *
  * @param {object} params
- * @param {string} [params.specimenAsset] legacy single-image prop
+ * @param {string} [params.specimenAsset] the signature image, registered as a specimen
  * @param {object|Array} [params.stampAssets] host-provided registry
  */
 export function useStampAssets({ specimenAsset, stampAssets }) {
@@ -37,7 +50,7 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
   ])
 
   /**
-   * assetId -> { id, label, src, bytes?, mimeType? }.
+   * assetId -> { id, kind, label, src, bytes?, mimeType? }.
    * The exporter reads `bytes` when present and falls back to fetching `src`.
    */
   const assets = useMemo(() => ({ ...provided, ...uploaded }), [provided, uploaded])
@@ -59,7 +72,17 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
     const id = createId('asset')
     setUploaded((current) => ({
       ...current,
-      [id]: { id, label: file.name, src: url, bytes, mimeType: file.type },
+      // An image the user picked is never the configured specimen, however much it
+      // may look like a signature — otherwise anyone could satisfy a "must be signed"
+      // check by uploading a blank PNG.
+      [id]: {
+        id,
+        kind: ASSET_KINDS.STAMP,
+        label: file.name,
+        src: url,
+        bytes,
+        mimeType: file.type,
+      },
     }))
     return id
   }, [])
@@ -68,6 +91,7 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
     () =>
       Object.entries(assets).map(([id, asset]) => ({
         id,
+        kind: asset.kind ?? ASSET_KINDS.STAMP,
         label: asset.label ?? id,
         src: asset.src,
       })),
@@ -77,29 +101,53 @@ export function useStampAssets({ specimenAsset, stampAssets }) {
   return { assets, list, addUploadedAsset }
 }
 
-/** Accept an object map, an array of descriptors, or the legacy single URL. */
-function normalizeAssets(stampAssets, specimenAsset) {
+/**
+ * Accept an object map, an array of descriptors, or the single `specimenAsset` URL.
+ *
+ * Entries default to `kind: 'stamp'`. A host that genuinely has several signature
+ * images can mark them `kind: 'specimen'` itself, which keeps multi-signature flows
+ * working without inventing a second registry.
+ */
+export function normalizeAssets(stampAssets, specimenAsset) {
   const result = {}
 
-  if (Array.isArray(stampAssets)) {
-    for (const asset of stampAssets) {
-      if (!asset?.id || !asset.src) continue
-      result[asset.id] = { id: asset.id, label: asset.label ?? asset.id, src: asset.src }
-    }
-  } else if (stampAssets && typeof stampAssets === 'object') {
-    for (const [id, value] of Object.entries(stampAssets)) {
-      if (!value) continue
-      result[id] =
-        typeof value === 'string'
-          ? { id, label: id, src: value }
-          : { id, label: value.label ?? id, ...value }
+  const put = (id, asset) => {
+    if (!id || !asset?.src) return
+    result[id] = {
+      ...asset,
+      id,
+      kind: asset.kind === ASSET_KINDS.SPECIMEN ? ASSET_KINDS.SPECIMEN : ASSET_KINDS.STAMP,
+      label: asset.label ?? id,
     }
   }
 
-  // `specimenAsset` is the original single-image API, kept working as the entry named
-  // 'default' so existing integrations do not have to change.
-  if (specimenAsset && !result.default) {
-    result.default = { id: 'default', label: 'Signature', src: specimenAsset }
+  if (Array.isArray(stampAssets)) {
+    for (const asset of stampAssets) put(asset?.id, asset)
+  } else if (stampAssets && typeof stampAssets === 'object') {
+    for (const [id, value] of Object.entries(stampAssets)) {
+      if (!value) continue
+      put(id, typeof value === 'string' ? { src: value } : value)
+    }
+  }
+
+  /*
+   * `specimenAsset` owns a reserved id of its own.
+   *
+   * It used to be flattened into an entry called 'default', which lost the fact that
+   * it was the specimen and — worse — was silently dropped whenever the host also
+   * passed `stampAssets.default`. A host entry that happens to use the reserved id is
+   * simply promoted to a specimen instead of being overwritten.
+   */
+  if (specimenAsset) {
+    const existing = result[SPECIMEN_ASSET_ID]
+    result[SPECIMEN_ASSET_ID] = existing
+      ? { ...existing, kind: ASSET_KINDS.SPECIMEN }
+      : {
+          id: SPECIMEN_ASSET_ID,
+          kind: ASSET_KINDS.SPECIMEN,
+          label: 'Signature',
+          src: specimenAsset,
+        }
   }
 
   return result

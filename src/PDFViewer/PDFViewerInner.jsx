@@ -12,11 +12,7 @@ import { ThumbnailSidebar } from './components/ThumbnailSidebar.jsx'
 import { LoadingState, ErrorState, EmptyState } from './components/feedback/DocumentStatus.jsx'
 import { ViewerProvider } from './context/ViewerContext.jsx'
 import { useTools } from './context/ToolContext.jsx'
-import {
-  useAnnotationActions,
-  useAnnotationState,
-  useAnnotationCounts,
-} from './context/AnnotationContext.jsx'
+import { useAnnotationActions, useAnnotationState } from './context/AnnotationContext.jsx'
 import { usePdfDocument } from './hooks/usePdfDocument.js'
 import { useZoom } from './hooks/useZoom.js'
 import { usePageVisibility } from './hooks/usePageVisibility.js'
@@ -30,7 +26,9 @@ import {
 } from './reducers/annotationReducer.js'
 import { exportFlattenedPdf } from './utils/exportPdf.js'
 import { displayPageSize, normalizeRotation } from './utils/coords.js'
-import { useStampAssets } from './hooks/useStampAssets.js'
+import { deriveViewerState, sameCounts } from './utils/viewerState.js'
+import { useStampAssets, ASSET_KINDS } from './hooks/useStampAssets.js'
+import { usePdfViewer } from './viewer/usePdfViewer.js'
 import { createId } from './utils/id.js'
 import { useLabels } from './context/LabelContext.jsx'
 
@@ -43,7 +41,7 @@ const DEFAULT_STAMP_WIDTH = 150
  * Split out from index.jsx because these hooks consume the very contexts index.jsx
  * mounts, and a component cannot read a provider it renders itself.
  */
-export function PDFViewerInner({ src, config = {}, viewerRef }) {
+export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
   const {
     specimenAsset,
     stampAssets: stampAssetsProp,
@@ -63,7 +61,14 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
     rotateExportedPages = true,
     /** Let the user pick their own stamp image from disk. */
     allowStampUpload = true,
-    customToolbarActions = [],
+    /**
+     * `{ displayActions, customToolbarActions }`, or `false` to drop the bar entirely
+     * for a host that builds its own outside the viewer and drives it through the
+     * `viewer` handle.
+     */
+    toolbar,
+    /** Replace the bar wholesale: `({ viewer, state, labels }) => ReactNode`. */
+    renderToolbar,
     workerSrc,
     workerPort,
   } = config
@@ -127,14 +132,35 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
   })
 
   const actions = useAnnotationActions()
-  const { canUndo, canRedo } = useAnnotationState()
-  const counts = useAnnotationCounts()
+  const { annotations, canUndo, canRedo } = useAnnotationState()
 
   const {
     assets: stampAssets,
     list: stampAssetList,
     addUploadedAsset,
   } = useStampAssets({ specimenAsset, stampAssets: stampAssetsProp })
+
+  /*
+   * Derived from the annotations AND the asset registry, because the two questions a
+   * host asks cannot be answered by either alone: a seal and a signature are both
+   * image annotations, and only the registry knows which is which.
+   */
+  const { hasSpecimen, hasAnnotation, counts } = useMemo(
+    () => deriveViewerState({ annotations: selectAll(annotations), assets: stampAssets }),
+    [annotations, stampAssets]
+  )
+
+  /**
+   * Which asset the Add Stamp button places when the caller does not name one.
+   *
+   * The specimen wins. It used to be `stampAssetList[0]`, and the specimen was
+   * appended last, so configuring `stampAssets` as well as `specimenAsset` quietly
+   * made the button stamp the wrong image.
+   */
+  const defaultAssetId = useMemo(() => {
+    const specimen = stampAssetList.find((asset) => asset.kind === ASSET_KINDS.SPECIMEN)
+    return (specimen ?? stampAssetList[0])?.id
+  }, [stampAssetList])
 
   const viewerValue = useMemo(
     () => ({
@@ -171,13 +197,29 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
   const onSpecimenChangeRef = useLatestRef(onSpecimenChange)
   const onAnnotationsChangeRef = useLatestRef(onAnnotationsChange)
 
+  /*
+   * Both callbacks are edge-triggered.
+   *
+   * `counts` is recomputed whenever any annotation changes, so firing on every change
+   * re-notified the host on each pointer-up of a drag with numbers that had not moved.
+   * A host that calls setState from these — which is the documented use — was
+   * re-rendering its tree for nothing. The refs start at a value no state can equal,
+   * so both still fire once on mount and the host begins in the right state.
+   */
+  const lastSpecimenRef = useRef(null)
+  const lastCountsRef = useRef(null)
+
   useEffect(() => {
-    // Kept for compatibility: reports image stamps only.
-    onSpecimenChangeRef.current?.(counts.image > 0)
-    // The replacement, so a host can enable Download for ink or text too — gating on
-    // the specimen flag alone locked out anyone who had only drawn or typed.
-    onAnnotationsChangeRef.current?.(counts)
-  }, [counts, onSpecimenChangeRef, onAnnotationsChangeRef])
+    if (lastSpecimenRef.current !== hasSpecimen) {
+      lastSpecimenRef.current = hasSpecimen
+      // Now genuinely "is there a specimen?" rather than "is there any image?".
+      onSpecimenChangeRef.current?.(hasSpecimen)
+    }
+    if (!sameCounts(lastCountsRef.current, counts)) {
+      lastCountsRef.current = counts
+      onAnnotationsChangeRef.current?.(counts)
+    }
+  }, [hasSpecimen, counts, onSpecimenChangeRef, onAnnotationsChangeRef])
 
   /* -------------------------------- actions -------------------------------- */
 
@@ -187,8 +229,7 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
       if (!allowMultipleStamps && counts.image >= 1) return null
       if (allowMultipleStamps && maxStamps !== null && counts.image >= maxStamps) return null
 
-      // Fall back to the only asset there is, which is the common single-signature case.
-      const id = assetId ?? stampAssetList[0]?.id
+      const id = assetId ?? defaultAssetId
       const asset = id ? stampAssets[id] : null
       if (!asset?.src) return null
 
@@ -220,7 +261,7 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
       maxStamps,
       counts.image,
       stampAssets,
-      stampAssetList,
+      defaultAssetId,
       actions,
       activePageRef,
       tools,
@@ -323,13 +364,16 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
 
   /* ------------------------------ imperative API ---------------------------- */
 
-  useImperativeHandle(
-    viewerRef,
+  /**
+   * One implementation, two doors.
+   *
+   * `ref` exposes a subset for compatibility and `viewer` exposes all of it; both are
+   * built from this object so the two can never drift into behaving differently.
+   */
+  const api = useMemo(
     () => ({
-      addTextStamp,
-      addImageStamp,
-      undo: actions.undo,
-      redo: actions.redo,
+      reload,
+
       getAnnotations: () => selectAll(actions.getSnapshot()),
       getFlattenedPDF: async () => {
         if (!sourceBytes) throw new Error('No document loaded')
@@ -340,46 +384,149 @@ export function PDFViewerInner({ src, config = {}, viewerRef }) {
           rotateExportedPages,
         })
       },
-    }),
-    [
+
       addTextStamp,
       addImageStamp,
+      uploadStamp,
+      duplicateSelected: duplicateAnnotation,
+      deleteSelected: deleteActive,
+
+      undo: actions.undo,
+      redo: actions.redo,
+
+      zoomIn: () => zoom.setScale((s) => s * 1.1),
+      zoomOut: () => zoom.setScale((s) => s * 0.9),
+      setScale: zoom.setScale,
+      setZoomMode: zoom.setZoomMode,
+
+      goToPage: scrollToPage,
+      rotatePages,
+
+      setDrawMode: tools.setIsDrawMode,
+      setInk: ({ color, thickness, opacity } = {}) => {
+        if (color !== undefined) tools.setInkColor(color)
+        if (thickness !== undefined) tools.setInkThickness(thickness)
+        if (opacity !== undefined) tools.setInkOpacity(opacity)
+      },
+
+      toggleThumbnails: () => setShowThumbnails((open) => !open),
+    }),
+    [
+      reload,
       actions,
       sourceBytes,
       stampAssets,
       pageRotations,
       rotateExportedPages,
+      addTextStamp,
+      addImageStamp,
+      uploadStamp,
+      duplicateAnnotation,
+      deleteActive,
+      zoom,
+      scrollToPage,
+      rotatePages,
+      tools,
     ]
+  )
+
+  useImperativeHandle(
+    viewerRef,
+    () => ({
+      addTextStamp: api.addTextStamp,
+      addImageStamp: api.addImageStamp,
+      undo: api.undo,
+      redo: api.redo,
+      getAnnotations: api.getAnnotations,
+      getFlattenedPDF: api.getFlattenedPDF,
+    }),
+    [api]
+  )
+
+  /* -------------------------- controller (usePdfViewer) --------------------- */
+
+  /*
+   * A handle always exists, even when the host did not create one.
+   *
+   * It costs a Set and an object, and it means `renderToolbar` can always be handed a
+   * full handle — so a custom toolbar is written the same way whether it is rendered
+   * inside the viewer or outside it next to `usePdfViewer()`.
+   */
+  const ownViewer = usePdfViewer()
+  const activeViewer = viewer ?? ownViewer
+
+  // Attaching in an effect, not during render, is what makes calling a handle method
+  // before mount a no-op instead of reaching a half-built viewer.
+  useEffect(() => activeViewer.__attach(api), [activeViewer, api])
+
+  /** The snapshot the store publishes — and what `renderToolbar` receives as `state`. */
+  const viewerState = useMemo(
+    () => ({
+      status,
+      error,
+      pageCount,
+      activePageIndex,
+      scale: zoom.scale,
+      zoomMode: zoom.zoomMode,
+      hasSpecimen,
+      hasAnnotation,
+      counts,
+      canUndo,
+      canRedo,
+      isDrawMode: tools.isDrawMode,
+      selectedId: tools.activeId,
+      showThumbnails,
+    }),
+    [
+      status,
+      error,
+      pageCount,
+      activePageIndex,
+      zoom.scale,
+      zoom.zoomMode,
+      hasSpecimen,
+      hasAnnotation,
+      counts,
+      canUndo,
+      canRedo,
+      tools.isDrawMode,
+      tools.activeId,
+      showThumbnails,
+    ]
+  )
+
+  useEffect(() => {
+    activeViewer.__store.setState(viewerState)
+  }, [activeViewer, viewerState])
+
+  /* -------------------------------- toolbar --------------------------------- */
+
+  /**
+   * Everything a toolbar item can need, in one object.
+   *
+   * Passing a context rather than props is what let the Toolbar signature drop from 22
+   * parameters to two: a new control reads what it needs from here instead of adding
+   * another link in the chain.
+   */
+  const toolbarCtx = useMemo(
+    () => ({
+      ...viewerState,
+      api,
+      stampAssets: stampAssetList,
+      allowStampUpload,
+      onDownload,
+      canDownload,
+    }),
+    [viewerState, api, stampAssetList, allowStampUpload, onDownload, canDownload]
   )
 
   return (
     <ViewerProvider value={viewerValue}>
       {/* `rpvs-viewer` is the stable, unhashed hook consumers theme through. */}
       <div className={`rpvs-viewer ${styles.shell}`}>
-        <Toolbar
-          scale={zoom.scale}
-          setScale={zoom.setScale}
-          zoomMode={zoom.zoomMode}
-          setZoomMode={zoom.setZoomMode}
-          stampAssets={stampAssetList}
-          allowStampUpload={allowStampUpload}
-          onAddStamp={addImageStamp}
-          onUploadStamp={uploadStamp}
-          onAddText={() => addTextStamp({})}
-          onDownload={onDownload}
-          canDownload={canDownload}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={actions.undo}
-          onRedo={actions.redo}
-          pageCount={pageCount}
-          activePageIndex={activePageIndex}
-          onGoToPage={scrollToPage}
-          showThumbnails={showThumbnails}
-          onToggleThumbnails={() => setShowThumbnails((open) => !open)}
-          onRotatePages={rotatePages}
-          customToolbarActions={customToolbarActions}
-        />
+        {renderToolbar
+          ? renderToolbar({ viewer: activeViewer, state: viewerState, labels })
+          : toolbar !== false && <Toolbar toolbar={toolbar} ctx={toolbarCtx} />}
 
         <div className={styles.body}>
           {status === 'ready' && showThumbnails && (

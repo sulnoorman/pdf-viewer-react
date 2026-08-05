@@ -47,8 +47,14 @@ const baseDefaults = {
 
 /**
  * An image/signature stamp.
+ *
  * `assetId` names an entry in the stamp asset registry rather than embedding a URL,
  * so export can embed each distinct image exactly once.
+ *
+ * The 'default' fallback used to be where `config.specimenAsset` was registered, which
+ * made it load-bearing and collide with any host entry of the same name. The specimen
+ * now owns its own reserved id, so this is an ordinary key like any other: it can
+ * never resolve to a specimen, and so can never make `hasSpecimen` true by accident.
  */
 export function createImageAnnotation({
   assetId = 'default',
@@ -270,12 +276,23 @@ export function selectByPage(state, pageIndex) {
   return result
 }
 
-/** Count per type — drives host callbacks like onAnnotationsChange. */
+const COUNTED_TYPES = Object.values(ANNOTATION_TYPES)
+
+/**
+ * Count per type — drives host callbacks like onAnnotationsChange.
+ *
+ * `total` counts only annotations of a known type. It used to be incremented outside
+ * the type check, so a dangling id or an unrecognised type inflated it and a host
+ * gating Submit on `total > 0` could unlock on nothing.
+ */
 export function selectCounts(state) {
   const counts = { image: 0, text: 0, ink: 0, total: 0 }
   for (const id of state.order) {
     const type = state.byId[id]?.type
-    if (type in counts) counts[type] += 1
+    // Tested against the type list rather than the counts object: `'total' in counts`
+    // is true, so the old `type in counts` guard also matched a bucket that is a sum.
+    if (!COUNTED_TYPES.includes(type)) continue
+    counts[type] += 1
     counts.total += 1
   }
   return counts

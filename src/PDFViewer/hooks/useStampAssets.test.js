@@ -33,10 +33,13 @@ describe('useStampAssets', () => {
     expect(result.current.assets).toEqual({})
   })
 
-  it('keeps the legacy single specimenAsset working', () => {
-    // The original API. Existing integrations must not have to change.
+  it('registers specimenAsset under the reserved id, marked as a specimen', () => {
+    // The `kind` is what makes `hasSpecimen` answerable at all — see viewerState.js.
     const { result } = renderHook(() => useStampAssets({ specimenAsset: '/sign.png' }))
-    expect(result.current.assets.default.src).toBe('/sign.png')
+    expect(result.current.assets.specimen).toMatchObject({
+      src: '/sign.png',
+      kind: 'specimen',
+    })
     expect(result.current.list).toHaveLength(1)
   })
 
@@ -66,14 +69,56 @@ describe('useStampAssets', () => {
     expect(result.current.list.map((a) => a.id)).toEqual(['ok'])
   })
 
-  it('lets an explicit "default" entry win over specimenAsset', () => {
+  it('no longer lets a host entry called "default" suppress specimenAsset', () => {
+    /*
+     * It used to. `specimenAsset` was registered as 'default' only `if (!result.default)`,
+     * so a host that passed both got no specimen at all and no warning about it.
+     */
     const { result } = renderHook(() =>
       useStampAssets({
-        specimenAsset: '/legacy.png',
-        stampAssets: { default: '/modern.png' },
+        specimenAsset: '/sign.png',
+        stampAssets: { default: '/seal.png' },
       })
     )
-    expect(result.current.assets.default.src).toBe('/modern.png')
+    expect(result.current.assets.specimen.src).toBe('/sign.png')
+    expect(result.current.assets.default.src).toBe('/seal.png')
+    expect(result.current.list).toHaveLength(2)
+  })
+
+  it('marks host entries as ordinary stamps', () => {
+    const { result } = renderHook(() => useStampAssets({ stampAssets: { seal: '/seal.png' } }))
+    expect(result.current.assets.seal.kind).toBe('stamp')
+  })
+
+  it('honours an explicit kind, so a host can register several signatures', () => {
+    const { result } = renderHook(() =>
+      useStampAssets({
+        stampAssets: [
+          { id: 'dir', kind: 'specimen', src: '/director.png' },
+          { id: 'fin', kind: 'specimen', src: '/finance.png' },
+          { id: 'seal', src: '/seal.png' },
+        ],
+      })
+    )
+    expect(result.current.list.filter((a) => a.kind === 'specimen').map((a) => a.id)).toEqual([
+      'dir',
+      'fin',
+    ])
+  })
+
+  it('promotes a host entry on the reserved id rather than overwriting it', () => {
+    // Keeps the host's own label and extras instead of silently replacing the entry.
+    const { result } = renderHook(() =>
+      useStampAssets({
+        specimenAsset: '/sign.png',
+        stampAssets: { specimen: { label: 'Tanda tangan', src: '/host.png' } },
+      })
+    )
+    expect(result.current.assets.specimen).toMatchObject({
+      kind: 'specimen',
+      label: 'Tanda tangan',
+      src: '/host.png',
+    })
   })
 
   describe('upload', () => {
@@ -138,7 +183,19 @@ describe('useStampAssets', () => {
       })
 
       expect(result.current.list).toHaveLength(2)
-      expect(result.current.assets.default.src).toBe('/sign.png')
+      expect(result.current.assets.specimen.src).toBe('/sign.png')
+    })
+
+    it('registers the upload as a stamp, never as a specimen', async () => {
+      // Otherwise a "must be signed" gate could be satisfied with any image at all.
+      const { result } = renderHook(() => useStampAssets({}))
+
+      let id
+      await act(async () => {
+        id = await result.current.addUploadedAsset(makeFile())
+      })
+
+      expect(result.current.assets[id].kind).toBe('stamp')
     })
 
     it('revokes every object URL on unmount', async () => {

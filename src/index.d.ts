@@ -1,5 +1,5 @@
 /**
- * Type declarations for react-pdf-viewer-stamping.
+ * Type declarations for @armsolusi/pdf-viewer.
  *
  * Hand-written rather than generated: the library is authored in JSX, and a generator
  * would produce `any` for most of the config surface — which is precisely the part a
@@ -131,37 +131,109 @@ export interface StampAsset {
   /** Shown in the stamp menu; defaults to the id. */
   label?: string
   src: string
+  /**
+   * What the image means. Defaults to `'stamp'`.
+   *
+   * Only `'specimen'` assets make `hasSpecimen` true, so mark your signature images
+   * here if you register several of them instead of using `specimenAsset`.
+   */
+  kind?: 'specimen' | 'stamp'
 }
 
 export interface AnnotationCounts {
+  /** Image stamps placed from an asset registered as a specimen. */
+  specimen: number
+  /** Image stamps from any other asset, including images the user uploaded. */
+  stamp: number
+  /** `specimen + stamp`. */
   image: number
   text: number
   ink: number
   total: number
 }
 
+/* ------------------------------------------------------------------ *
+ * Toolbar
+ * ------------------------------------------------------------------ */
+
+/**
+ * The configurable toolbar controls — the right-hand action row.
+ *
+ * `history` is a cluster; `undo` and `redo` place its halves individually. `divider` and
+ * `spacer` may repeat.
+ *
+ * The navigation controls (`thumbnails`, `pageNav`, `zoom`, `rotate`) are deliberately
+ * absent: they are always rendered and `displayActions` cannot place them.
+ */
+export type ToolbarActionId =
+  | 'history'
+  | 'undo'
+  | 'redo'
+  | 'draw'
+  | 'addText'
+  | 'stamp'
+  | 'download'
+  | 'divider'
+  | 'spacer'
+
+/** The shipped order of the action row, for filtering rather than rewriting. */
+export declare const DEFAULT_TOOLBAR_ACTIONS: readonly ToolbarActionId[]
+
 export interface CustomToolbarAction {
-  id?: string
+  /** Required to reference the action from `displayActions`. */
+  id: string
   /** Used as the accessible name, and as the button content when no icon is given. */
   label: string
   icon?: ReactNode
   tooltip?: string
+  disabled?: boolean
+  /** Renders the button in its pressed state. */
+  active?: boolean
   onClick: () => void
+}
+
+export interface ToolbarConfig {
+  /**
+   * Which actions appear in the right-hand row, and in what order.
+   *
+   * This configures **that row only**. The navigation controls — thumbnails, page
+   * navigation, zoom and page rotation — are always rendered as shipped, because they
+   * are how a user reads the document rather than acts on it. Use `renderToolbar` to
+   * rearrange the whole bar.
+   *
+   * Omit it (or pass an empty array) and every action appears in its shipped order,
+   * with each custom action after it. Provide one and **only** the ids named appear —
+   * including custom actions, and including `download` even when `onDownload` is set.
+   *
+   * To hide one action, filter the exported default rather than writing the list by
+   * hand, so a later version's new actions still reach your users:
+   * `DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'addText')`
+   */
+  displayActions?: (ToolbarActionId | (string & {}))[]
+  /**
+   * Your own buttons, in the right-hand row. Reusing a built-in action id replaces that
+   * control, which is how to swap Download for an Upload button of your own.
+   */
+  customToolbarActions?: CustomToolbarAction[]
 }
 
 export interface PDFViewerConfig {
   /**
-   * URL of `pdfjs-dist/build/pdf.worker.min.mjs`.
+   * Override the pdf.js worker URL.
    *
-   * Required in practice: the library does not bundle the worker, because how you
-   * reference it depends on your bundler, and inlining it would add over a megabyte
-   * to the package. See the README for per-bundler snippets.
+   * Optional: the package ships its own worker and your bundler emits it automatically,
+   * so there is normally nothing to set. Pass this to use a copy you serve yourself.
    */
   workerSrc?: string
   /** A Worker you constructed yourself. Takes precedence over `workerSrc`. */
   workerPort?: Worker
 
-  /** Single stamp image. Registered as the asset `default`. */
+  /**
+   * The signature image, registered under the reserved asset id `'specimen'`.
+   *
+   * This is what `hasSpecimen` counts. A seal from `stampAssets` or an image the user
+   * uploaded is an image annotation just the same, but neither satisfies it.
+   */
   specimenAsset?: string
   /** Several stamp images, as a map or a list. */
   stampAssets?: Record<string, string | StampAsset> | StampAsset[]
@@ -182,9 +254,15 @@ export interface PDFViewerConfig {
    */
   rotateExportedPages?: boolean
 
-  /** Fired whenever the annotation counts change. */
+  /**
+   * Fired when the counts change — by value, so moving an existing stamp does not
+   * fire it. Also fires once on mount.
+   *
+   * Prefer `usePdfViewer` + `useViewerState`, which need no mirrored state in your
+   * component and give you `hasSpecimen` and `hasAnnotation` separately.
+   */
   onAnnotationsChange?: (counts: AnnotationCounts) => void
-  /** Legacy: fired with whether at least one IMAGE stamp exists. */
+  /** Fired when `hasSpecimen` changes. See `useViewerState` for the modern form. */
   onSpecimenChange?: (hasSpecimen: boolean) => void
   /** Called when the document fails to load. */
   onLoadError?: (error: Error) => void
@@ -197,7 +275,17 @@ export interface PDFViewerConfig {
   /** Disables the Download button. Defaults to true. */
   canDownload?: boolean
 
-  customToolbarActions?: CustomToolbarAction[]
+  /** Which actions the toolbar shows, or `false` to drop the bar entirely. */
+  toolbar?: ToolbarConfig | false
+  /**
+   * Replace the toolbar wholesale. `viewer` is a full handle — the same shape
+   * `usePdfViewer()` returns — so the same component works inside or outside the viewer.
+   */
+  renderToolbar?: (context: {
+    viewer: PdfViewerHandle
+    state: ViewerState
+    labels: Required<ViewerLabels>
+  }) => ReactNode
 }
 
 /* ------------------------------------------------------------------ *
@@ -234,7 +322,110 @@ export interface PDFViewerHandle {
 export interface PDFViewerProps {
   src: PdfSource
   config?: PDFViewerConfig
+  /** Handle from `usePdfViewer()`. The recommended way to read state and drive it. */
+  viewer?: PdfViewerHandle
+  /** The older, smaller door onto the same API. */
   ref?: Ref<PDFViewerHandle>
 }
 
 export declare const PDFViewer: ComponentType<PDFViewerProps>
+
+/* ------------------------------------------------------------------ *
+ * Controller
+ * ------------------------------------------------------------------ */
+
+export type ViewerStatus = 'idle' | 'loading' | 'ready' | 'error'
+export type ZoomMode = 'auto' | 'actual-size' | 'page-fit' | 'page-width' | 'custom'
+
+/** Everything readable through `useViewerState`. */
+export interface ViewerState {
+  status: ViewerStatus
+  error: Error | null
+  pageCount: number
+  activePageIndex: number
+  scale: number
+  zoomMode: ZoomMode
+  /**
+   * At least one stamp from a specimen asset — i.e. from `config.specimenAsset` or an
+   * asset marked `kind: 'specimen'`. A seal or an uploaded image does not count.
+   */
+  hasSpecimen: boolean
+  /** At least one mark the user made: ink or text. Image stamps do not count. */
+  hasAnnotation: boolean
+  counts: AnnotationCounts
+  canUndo: boolean
+  canRedo: boolean
+  isDrawMode: boolean
+  selectedId: string | null
+  showThumbnails: boolean
+}
+
+/**
+ * A stable handle onto a viewer.
+ *
+ * Every method is safe to call before the viewer has mounted — it is a no-op returning
+ * `undefined` rather than a crash, so wiring up a toolbar needs no readiness check.
+ */
+export interface PdfViewerHandle {
+  /** Current state. Prefer `useViewerState`, which re-renders when it changes. */
+  getState(): ViewerState
+  subscribe(listener: () => void): () => void
+
+  /** Retry loading the document. */
+  reload(): void
+
+  getFlattenedPDF(): Promise<Blob>
+  getAnnotations(): Annotation[]
+
+  addTextStamp(options?: {
+    text?: string
+    fontSize?: number
+    color?: string
+    fontFamily?: string
+  }): string
+  /** Place a stamp image. Defaults to the specimen, then the first registered asset. */
+  addImageStamp(assetId?: string): Promise<string | null>
+  /** Register an image from disk and place it immediately. */
+  uploadStamp(file: File): Promise<void>
+  duplicateSelected(id?: string): boolean
+  deleteSelected(): boolean
+
+  undo(): void
+  redo(): void
+
+  zoomIn(): void
+  zoomOut(): void
+  setScale(scale: number | ((current: number) => number)): void
+  setZoomMode(mode: ZoomMode): void
+
+  goToPage(pageIndex: number): void
+  /** Turn the current page, or every page, by a multiple of 90°. */
+  rotatePages(delta: number, scope?: 'page' | 'all'): void
+
+  setDrawMode(enabled: boolean): void
+  setInk(settings: { color?: string; thickness?: number; opacity?: number }): void
+
+  toggleThumbnails(): void
+}
+
+/**
+ * Create a viewer handle, then pass it as `<PDFViewer viewer={...} />`.
+ *
+ * The identity never changes, so it will not re-render the viewer and is safe in a
+ * dependency array.
+ */
+export declare function usePdfViewer(): PdfViewerHandle
+
+/**
+ * Read viewer state from anywhere in the host — no onChange callback, no mirrored
+ * `useState`.
+ *
+ * Pass a selector to re-render only when the value you actually read changes, and
+ * return a primitive or a stable reference from it: a selector that builds a fresh
+ * object is never equal to the last, so it re-renders on every change.
+ */
+export declare function useViewerState(viewer: PdfViewerHandle | null): ViewerState
+export declare function useViewerState<T>(
+  viewer: PdfViewerHandle | null,
+  selector: (state: ViewerState) => T
+): T

@@ -2,7 +2,7 @@ import { Meta } from '@storybook/addon-docs/blocks'
 
 <Meta title="Getting Started" />
 
-# react-pdf-viewer-stamping
+# @armsolusi/pdf-viewer
 
 A React PDF viewer with stamping and freehand annotation built in — pdf.js rendering and
 pdf-lib export behind a single component.
@@ -28,16 +28,12 @@ document — it is the real component, not a screenshot.
 ## Install
 
 ```bash
-npm install react-pdf-viewer-stamping pdfjs-dist
+npm install @armsolusi/pdf-viewer
 ```
 
-**Peer dependencies:** React 18 or 19, and `pdfjs-dist` v6. Modern package managers
-install peers automatically, but declaring `pdfjs-dist` is worth doing because your own
-code imports the worker from it.
-
-It is a peer rather than a bundled dependency on purpose: two copies in one application
-means two 1.2 MB workers, and pdf.js refuses to run when the worker and the API come
-from different versions.
+That is the whole setup. **React 18 or 19 is the only peer dependency** — `pdfjs-dist`,
+`pdf-lib` and the pdf.js worker all come with the package, so there is no worker URL to
+wire up and no second install to remember.
 
 The package is **ESM only** — there is no CommonJS build, because there could not be a
 working one: pdfjs-dist v6 is itself ESM-only.
@@ -45,64 +41,64 @@ working one: pdfjs-dist v6 is itself ESM-only.
 ## The smallest working example
 
 ```jsx
-import { useRef, useCallback } from 'react'
-import { PDFViewer } from 'react-pdf-viewer-stamping'
-import 'react-pdf-viewer-stamping/style.css'
-
-// Bundler-specific — see "The pdf.js worker" below.
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { useCallback } from 'react'
+import { PDFViewer, usePdfViewer } from '@armsolusi/pdf-viewer'
+import '@armsolusi/pdf-viewer/style.css'
 
 export function SignDocument() {
-  const viewer = useRef(null)
+  const viewer = usePdfViewer()
 
   const download = useCallback(async () => {
-    const blob = await viewer.current.getFlattenedPDF()
+    const blob = await viewer.getFlattenedPDF()
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.download = 'signed.pdf'
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }, [])
+  }, [viewer])
 
   return (
     <div style={{ height: '100vh' }}>
       <PDFViewer
-        ref={viewer}
+        viewer={viewer}
         src="/contract.pdf"
-        config={{ workerSrc, specimenAsset: '/signature.png', onDownload: download }}
+        config={{ specimenAsset: '/signature.png', onDownload: download }}
       />
     </div>
   )
 }
 ```
 
+**`usePdfViewer()` is how you reach the viewer** — for imperative calls like the export
+above, and for reading state. Pair it with `useViewerState(viewer, selector?)` to gate your
+own buttons on `hasSpecimen` or `hasAnnotation`; see **Integration → Specimen vs
+Annotation**. A `ref` still works and exposes a smaller subset of the same API.
+
 **The viewer fills its container**, so give the parent a height. Every story here is
 wrapped in an `80vh` box for exactly that reason.
 
-## Two things this library will not do for you
+## The one thing this library will not do for you
 
 **It never saves the file.** `onDownload` is yours to implement. That is what makes
 uploading the signed document — rather than downloading it — just as natural. See
 **Integration → Submit gating**.
 
-**It never bundles the pdf.js worker.** The worker is 1.25 MB; bundling it would make the
-package fifteen times larger for everyone, including apps that already ship their own
-copy of pdfjs-dist.
-
 ## The pdf.js worker
 
-```js
-// Vite / Rollup
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+**There is nothing to configure.** pdf.js parses documents in a Web Worker, and that
+worker ships inside this package; your bundler emits it as a separate file on its own,
+fetched only when a document loads.
 
-// webpack 5 / Next.js
-const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
-```
+It is worth knowing why, because it constrains one thing. No library can portably ask a
+bundler for the URL of a file inside a *dependency*: `?url` imports are Vite-only, and
+`new URL('pkg/file', import.meta.url)` works on webpack but not Vite. A path relative to
+one of the package's own modules is the only form both understand — so the worker has to
+live here, and `pdfjs-dist` is pinned to an exact version, since pdf.js throws when the
+worker and the API versions differ.
 
-Or copy `node_modules/pdfjs-dist/build/pdf.worker.min.mjs` into `public/` and pass
-`workerSrc: '/pdf.worker.min.mjs'` — remembering to re-copy on upgrade, because the
-worker and the API must be the same version.
+Pass `config.workerSrc` to override it with a copy you serve yourself, or
+`config.workerPort` for a `Worker` you built.
 
 In Next.js the viewer must be client-side: add `'use client'` and load it with
 `dynamic(() => import('./Viewer'), { ssr: false })`.
@@ -128,6 +124,7 @@ overflow on page 3.
 ## Where to look next
 
 - **PDFViewer → Basic** — the options, as live controls
-- **Integration** — gating a Submit button, uploading instead of downloading, reading
-  annotations as data
-- **Customisation** — theming with CSS custom properties, translating the UI
+- **Integration** — gating a Submit button, `hasSpecimen` vs `hasAnnotation`, uploading
+  instead of downloading, reading annotations as data
+- **Customisation** — the toolbar (which controls appear, replacing one, replacing the
+  whole bar), theming with CSS custom properties, translating the UI

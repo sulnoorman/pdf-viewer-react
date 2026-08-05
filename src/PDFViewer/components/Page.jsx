@@ -132,7 +132,7 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
         })
       } catch (err) {
         if (err?.name !== 'RenderingCancelledException') {
-          console.error('[react-pdf-viewer-stamping] Page render failed:', err)
+          console.error('[@armsolusi/pdf-viewer] Page render failed:', err)
         }
       }
     }

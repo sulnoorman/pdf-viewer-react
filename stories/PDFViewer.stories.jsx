@@ -199,10 +199,11 @@ function CustomActionsDemo(args) {
   )
 
   return (
-    <ViewerHarness {...args} customToolbarActions={actions} viewerRef={viewer}>
+    <ViewerHarness {...args} toolbar={{ customToolbarActions: actions }} viewerRef={viewer}>
       <div style={panel}>
         Both buttons call <code style={code}>ref.addTextStamp()</code>. The new box lands on
-        whichever page is in view and focuses itself.
+        whichever page is in view and focuses itself. With no{' '}
+        <code style={code}>displayActions</code>, they are appended after the built-in controls.
       </div>
     </ViewerHarness>
   )

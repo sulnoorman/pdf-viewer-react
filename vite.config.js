@@ -38,8 +38,15 @@ export default defineConfig(({ command }) => ({
         Every target that can run pdfjs-dist v6 already handles ESM packages.
       */
       formats: ['es'],
-      fileName: 'react-pdf-viewer-stamping',
-      // Deterministic stylesheet name so `react-pdf-viewer-stamping/style.css` resolves.
+      /*
+        Flat, and deliberately NOT derived from the package name.
+
+        The package is scoped (`@armsolusi/pdf-viewer`); using that verbatim would make
+        Rollup write dist/@armsolusi/pdf-viewer.js and quietly break `main` and the
+        exports map. Keep this in step with both by hand.
+      */
+      fileName: 'pdf-viewer',
+      // Deterministic stylesheet name so `@armsolusi/pdf-viewer/style.css` resolves.
       cssFileName: 'style',
     },
     rollupOptions: {
@@ -52,7 +59,28 @@ export default defineConfig(({ command }) => ({
         // Icons are imported via deep paths (@tabler/icons-react/dist/esm/icons/*.mjs),
         // so a bare package name would not match — hence the regex.
         /^@tabler\/icons-react(\/.*)?$/,
+        /*
+          Kept out of the bundle on purpose, and copied into dist/ verbatim by
+          scripts/copy-worker.mjs.
+
+          It holds `new URL('./pdf.worker.min.mjs', import.meta.url)`. Bundled, Vite would
+          resolve that here and inline 1.2 MB as base64 — the bug that once took this
+          package from 36 kB to 1.7 MB. External, the expression reaches the consumer's
+          bundler intact, where a path relative to the module works on both Vite and
+          webpack 5.
+        */
+        './workerUrl.js',
       ],
+      output: {
+        /*
+          Flatten the one relative external.
+          Rollup resolves a relative external to an absolute path and then emits it
+          relative to the entry — `./PDFViewer/utils/workerUrl.js`, mirroring src/. The
+          published package is flat, so without this the import points at a directory
+          that does not exist in dist/ and every consumer build fails to resolve it.
+        */
+        paths: (id) => (id.endsWith('workerUrl.js') ? './workerUrl.js' : id),
+      },
       // No `output.globals`: that only applies to UMD/IIFE, which this no longer builds.
     },
   },

@@ -1,11 +1,10 @@
 import './App.css'
-import { useState, useRef, useCallback } from 'react'
-import { PDFViewer } from './PDFViewer'
+import { useCallback } from 'react'
+import { PDFViewer, usePdfViewer, useViewerState } from './index.js'
 import IconFileText from '@tabler/icons-react/dist/esm/icons/IconFileText.mjs'
 
-// The library deliberately does not bundle the pdf.js worker — the host app supplies
-// its URL, because how you reference it depends on your bundler. This is the Vite form.
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+// No workerSrc: the pdf.js worker ships inside the package and is resolved by the
+// consumer's own bundler. Pass `config.workerSrc` only to override it.
 
 /**
  * Indonesian UI, supplied entirely from the host.
@@ -58,12 +57,19 @@ const LABELS = {
 }
 
 export default function App() {
-  const viewerRef = useRef(null)
-  const [counts, setCounts] = useState({ image: 0, text: 0, ink: 0, total: 0 })
+  /*
+   * The controller pair, rather than a ref plus an onChange callback.
+   *
+   * `viewer` has a stable identity, so passing it as a prop never re-renders the
+   * viewer, and `useViewerState` reads state out here — outside <PDFViewer> — which is
+   * what makes gating a button below possible without mirroring anything in state.
+   */
+  const viewer = usePdfViewer()
+  const { hasSpecimen, hasAnnotation, counts } = useViewerState(viewer)
 
   const handleDownload = useCallback(async () => {
     try {
-      const blob = await viewerRef.current.getFlattenedPDF()
+      const blob = await viewer.getFlattenedPDF()
       const url = URL.createObjectURL(blob)
       // const link = document.createElement('a')
       // link.href = url
@@ -77,42 +83,60 @@ export default function App() {
     } catch (e) {
       alert(`Failed to export: ${e.message}`)
     }
-  }, [])
+  }, [viewer])
 
   const addDocumentNumber = useCallback(() => {
-    viewerRef.current?.addTextStamp({
+    viewer.addTextStamp({
       text: '123/IT-DEV/VIII/2026',
       fontSize: 16,
       color: '#000000',
     })
-  }, [])
+  }, [viewer])
 
   return (
-    <div className="w-screen h-screen bg-gray-100 flex items-center justify-center">
-      <PDFViewer
-        ref={viewerRef}
-        src="/signed-document.pdf"
-        config={{
-          workerSrc,
-          labels: LABELS,
-          specimenAsset: '/Tandatangan.png',
-          // Gating on the image-stamp count alone locked out anyone who had only
-          // drawn or typed. Any annotation now enables the export button.
-          onAnnotationsChange: setCounts,
-          onDownload: handleDownload,
-          canDownload: counts.total > 0,
-          allowMultipleStamps: true,
-          maxStamps: 5,
-          customToolbarActions: [
-            {
-              id: 'btn-add-number',
-              label: 'Ambil Nomor',
-              icon: <IconFileText size={14} stroke={2} />,
-              onClick: addDocumentNumber,
+    <div className="w-screen h-screen bg-gray-100 flex flex-col">
+      <div className="flex-1 min-h-0">
+        <PDFViewer
+          viewer={viewer}
+          src="/signed-document.pdf"
+          config={{
+            labels: LABELS,
+            specimenAsset: '/Tandatangan.png',
+            onDownload: handleDownload,
+            canDownload: counts.total > 0,
+            allowMultipleStamps: true,
+            maxStamps: 5,
+            toolbar: {
+              // The action row only — thumbnails, page navigation and zoom stay as they
+              // are. Note that Download has to be listed even though onDownload is set;
+              // leaving it out hides the button.
+              displayActions: ['history', 'add-number', 'download'],
+              customToolbarActions: [
+                {
+                  id: 'add-number',
+                  label: 'Ambil Nomor',
+                  icon: <IconFileText size={14} stroke={2} />,
+                  onClick: addDocumentNumber,
+                },
+              ],
             },
-          ],
-        }}
-      />
+          }}
+        />
+      </div>
+
+      {/*
+        The two requirements that made the flags worth separating. Both buttons live
+        outside <PDFViewer> and neither goes through an onChange callback.
+      */}
+      <div className="flex items-center gap-3 p-3 text-sm bg-white border-t">
+        <button type="button" disabled={!hasSpecimen} className="px-3 py-1.5 border rounded">
+          Butuh spesimen {hasSpecimen ? '✓' : '✗'}
+        </button>
+        <button type="button" disabled={!hasAnnotation} className="px-3 py-1.5 border rounded">
+          Butuh anotasi {hasAnnotation ? '✓' : '✗'}
+        </button>
+        <code className="text-xs text-gray-600">{JSON.stringify(counts)}</code>
+      </div>
     </div>
   )
 }

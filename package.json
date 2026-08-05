@@ -1,5 +1,5 @@
 {
-  "name": "react-pdf-viewer-stamping",
+  "name": "@armsolusi/pdf-viewer",
   "version": "0.1.0",
   "description": "A batteries-included React PDF viewer with built-in stamping and freehand annotation — pdf.js rendering and pdf-lib export in a single component.",
   "keywords": [
@@ -26,11 +26,11 @@
     "url": "https://github.com/sulnoorman/pdf-viewer-react/issues"
   },
   "type": "module",
-  "main": "dist/react-pdf-viewer-stamping.js",
+  "main": "dist/pdf-viewer.js",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/react-pdf-viewer-stamping.js"
+      "import": "./dist/pdf-viewer.js"
     },
     "./style.css": "./dist/style.css",
     "./package.json": "./package.json"
@@ -38,13 +38,16 @@
   "sideEffects": [
     "*.css"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
   "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && bun scripts/copy-types.mjs",
+    "build": "vite build && bun scripts/copy-types.mjs && bun scripts/copy-worker.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -62,10 +65,10 @@
   },
   "dependencies": {
     "@tabler/icons-react": "^3.44.0",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "6.1.200"
   },
   "peerDependencies": {
-    "pdfjs-dist": "^6.0.0",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
@@ -91,8 +94,7 @@
     "storybook": "^10.5.5",
     "tailwindcss": "^4.3.2",
     "vite": "^8.1.1",
-    "vitest": "^4.1.10",
-    "pdfjs-dist": "^6.1.200"
+    "vitest": "^4.1.10"
   },
   "types": "dist/index.d.ts",
   "engines": {

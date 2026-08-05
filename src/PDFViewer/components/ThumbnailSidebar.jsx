@@ -99,7 +99,7 @@ function ThumbnailComponent({ pdfDoc, pageIndex, pageSize, userRotation, isActiv
         await renderTask.promise
       } catch (err) {
         if (err?.name !== 'RenderingCancelledException') {
-          console.error('[react-pdf-viewer-stamping] Thumbnail render failed:', err)
+          console.error('[@armsolusi/pdf-viewer] Thumbnail render failed:', err)
         }
       }
     }

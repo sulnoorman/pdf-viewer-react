@@ -14,16 +14,18 @@ import { PDFViewerInner } from './PDFViewerInner.jsx'
  *
  * @param {object} props
  * @param {string} props.src URL of the PDF to display
- * @param {object} [props.config] see docs/API.md
- * @param {React.Ref} ref exposes addTextStamp / addImageStamp / undo / redo /
- *   getAnnotations / getFlattenedPDF
+ * @param {object} [props.config] see the README
+ * @param {object} [props.viewer] handle from `usePdfViewer()`; the recommended way to
+ *   read state and drive the viewer, because it also works from outside this subtree
+ * @param {React.Ref} ref the older, smaller door onto the same API: addTextStamp /
+ *   addImageStamp / undo / redo / getAnnotations / getFlattenedPDF
  */
-export const PDFViewer = forwardRef(function PDFViewer({ src, config }, ref) {
+export const PDFViewer = forwardRef(function PDFViewer({ src, config, viewer }, ref) {
   return (
     <LabelProvider labels={config?.labels}>
       <AnnotationProvider>
         <ToolProvider>
-          <PDFViewerInner src={src} config={config ?? {}} viewerRef={ref} />
+          <PDFViewerInner src={src} config={config ?? {}} viewerRef={ref} viewer={viewer} />
         </ToolProvider>
       </AnnotationProvider>
     </LabelProvider>

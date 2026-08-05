@@ -1,4 +1,4 @@
-# react-pdf-viewer-stamping
+# @armsolusi/pdf-viewer
 
 A React PDF viewer with stamping and freehand annotation built in — pdf.js rendering and
 pdf-lib export behind a single component.
@@ -28,18 +28,18 @@ text stays selectable and vector art stays vector; nothing is re-rasterised.
 ## Install
 
 ```bash
-npm install react-pdf-viewer-stamping pdfjs-dist
+npm install @armsolusi/pdf-viewer
 ```
 
-**Peer dependencies:** React 18 or 19, and `pdfjs-dist` v6. Modern npm, pnpm and bun
-install peers automatically, so the explicit `pdfjs-dist` above is belt-and-braces — but
-declaring it is worth doing, because your own code imports the worker from it.
+That is the whole setup. **React 18 or 19 is the only peer dependency**; `pdfjs-dist`,
+`pdf-lib` and the pdf.js worker come with the package, so there is no worker URL to wire
+up and no second install to remember. See "The pdf.js worker" below for why that is
+unusual, and how to override it.
 
-`pdfjs-dist` is a peer rather than a bundled dependency on purpose: two copies in one
-application means two 1.2 MB workers, and pdf.js refuses to run when the worker and the
-API come from different versions.
-
-`pdf-lib` is an ordinary dependency — it powers export and you never import it yourself.
+`pdfjs-dist` is pinned to an exact version rather than a range, because pdf.js refuses to
+run when the worker and the API versions differ. If your app also uses pdfjs-dist
+directly, npm will share one copy when the ranges overlap; otherwise you get two, and
+`config.workerSrc` lets you point the viewer at yours.
 
 **This package is ESM only.** There is no CommonJS build, because there could not be a
 working one: pdfjs-dist v6 is itself ESM-only. Vite, webpack 5, Next.js, Rollup and
@@ -48,33 +48,29 @@ Parcel all handle this. From a CommonJS file, use `await import(...)`.
 ## Quick start
 
 ```jsx
-import { useRef, useCallback } from 'react'
-import { PDFViewer } from 'react-pdf-viewer-stamping'
-import 'react-pdf-viewer-stamping/style.css'
-
-// See "The pdf.js worker" below — this line is bundler-specific.
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { useCallback } from 'react'
+import { PDFViewer, usePdfViewer } from '@armsolusi/pdf-viewer'
+import '@armsolusi/pdf-viewer/style.css'
 
 export function SignDocument() {
-  const viewer = useRef(null)
+  const viewer = usePdfViewer()
 
   const download = useCallback(async () => {
-    const blob = await viewer.current.getFlattenedPDF()
+    const blob = await viewer.getFlattenedPDF()
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.download = 'signed.pdf'
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  }, [])
+  }, [viewer])
 
   return (
     <div style={{ height: '100vh' }}>
       <PDFViewer
-        ref={viewer}
+        viewer={viewer}
         src="/contract.pdf"
         config={{
-          workerSrc,
           specimenAsset: '/signature.png',
           onDownload: download,
         }}
@@ -92,32 +88,46 @@ possible), and it never bundles the pdf.js worker.
 
 ## The pdf.js worker
 
-pdf.js needs a worker script, and the URL depends on your bundler. The worker is 1.25 MB,
-so bundling it would have made the package fifteen times larger for everyone — including
-apps that already ship their own copy of pdfjs-dist.
+**There is nothing to configure.** pdf.js parses documents in a Web Worker, and that
+worker ships inside this package; your bundler emits it as a separate file on its own.
 
-**Vite / Rollup**
+That is worth a note because it is unusual, and because it constrains one thing. There is
+no portable way for a library to ask a bundler for the URL of a file inside a
+*dependency* — `?url` imports are Vite-only, and the `new URL('pkg/file', import.meta.url)`
+form works on webpack but not Vite. A path relative to one of *our own* modules is the
+only expression both understand, so the worker has to live here. In exchange,
+`pdfjs-dist` is pinned to an exact version: pdf.js throws when the worker and the API
+versions differ, and a range would let npm install a mismatched pair.
+
+The worker is about 1.2 MB, emitted as its own file and fetched only when a document
+loads — it never enters your main bundle.
+
+**If the document fails with "Setting up fake worker failed"** on the Vite dev server,
+your setup has moved the package somewhere the built-in correction does not anticipate.
+Add one line to `vite.config.js`:
 
 ```js
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+optimizeDeps: { exclude: ['@armsolusi/pdf-viewer'] }
 ```
 
-**webpack 5 / Next.js**
+Vite's dev server pre-bundles dependencies into `node_modules/.vite/deps/`, which relocates
+the module without copying the worker beside it. The library maps the usual layout back
+automatically, so this is a fallback rather than a required step — and it affects the dev
+server only; production builds emit the worker as a normal asset.
 
-```js
-const workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+**Overriding it.** Pass `config.workerSrc` to point at a copy you serve yourself, or
+`config.workerPort` for a `Worker` you constructed:
+
+```jsx
+// self-hosted, e.g. copied into public/ by your build
+config={{ workerSrc: '/pdf.worker.min.mjs' }}
 ```
 
-In Next.js the viewer must be client-side — add `'use client'` and load it with
+Both take precedence over the bundled copy. If you already load pdfjs-dist yourself and
+have set `GlobalWorkerOptions` globally, that is respected too.
+
+**Next.js.** The viewer must be client-side: add `'use client'` and load it with
 `dynamic(() => import('./Viewer'), { ssr: false })`.
-
-**Copy to your public folder**
-
-Copy `node_modules/pdfjs-dist/build/pdf.worker.min.mjs` into `public/` and pass
-`workerSrc: '/pdf.worker.min.mjs'`. Remember to re-copy when pdfjs-dist is upgraded — the
-worker and the API must be the same version.
-
-You can also construct the Worker yourself and pass `config.workerPort`.
 
 ## `src`
 
@@ -139,9 +149,9 @@ depend on a URL still being reachable.
 
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `workerSrc` | `string` | — | URL of the pdf.js worker |
+| `workerSrc` | `string` | bundled | Override the worker URL; the package ships one |
 | `workerPort` | `Worker` | — | A Worker you built yourself; wins over `workerSrc` |
-| `specimenAsset` | `string` | — | Single stamp image, registered as `default` |
+| `specimenAsset` | `string` | — | The signature image; the only thing `hasSpecimen` counts |
 | `stampAssets` | `Record<string, string \| StampAsset> \| StampAsset[]` | — | Several stamp images |
 | `allowStampUpload` | `boolean` | `true` | Let the user add an image from disk |
 | `allowMultipleStamps` | `boolean` | `true` | `false` allows exactly one image stamp |
@@ -150,12 +160,19 @@ depend on a URL still being reachable.
 | `rotateExportedPages` | `boolean` | `true` | Whether viewer rotation is written into the file |
 | `onDownload` | `() => void` | — | Renders the Download button when provided |
 | `canDownload` | `boolean` | `true` | Disables the Download button |
-| `onAnnotationsChange` | `(counts) => void` | — | `{ image, text, ink, total }` |
-| `onSpecimenChange` | `(hasSpecimen: boolean) => void` | — | Legacy: fires with whether at least one **image** stamp exists. Prefer `onAnnotationsChange`, which also counts text and ink |
+| `onAnnotationsChange` | `(counts) => void` | — | `{ specimen, stamp, image, text, ink, total }`. Fires only when a number changes |
+| `onSpecimenChange` | `(hasSpecimen: boolean) => void` | — | Fires when `hasSpecimen` changes |
 | `onLoadError` | `(error) => void` | — | Document failed to load |
-| `customToolbarActions` | `CustomToolbarAction[]` | `[]` | Your own toolbar buttons |
+| `toolbar` | `ToolbarConfig \| false` | — | Which actions appear; `false` hides the bar |
+| `renderToolbar` | `({ viewer, state, labels }) => ReactNode` | — | Replace the bar entirely |
+
+Both callbacks still work, but reading state through the controller below is simpler and
+does not need a mirrored `useState`.
 
 ### Ref
+
+The smaller, older door onto the same implementation. Everything here also exists on the
+controller handle below, which is what new code should use.
 
 | Method | Returns | Notes |
 | --- | --- | --- |
@@ -165,36 +182,178 @@ depend on a URL still being reachable.
 | `addImageStamp(assetId?)` | `Promise<string \| null>` | Places a stamp image |
 | `undo()` / `redo()` | `void` | Same stack as the toolbar buttons |
 
-## Recipes
+## Reading state from your own components
 
-### Gate a button outside the viewer on whether the document has been annotated
-
-A reviewer must mark up the document before they can submit. The Submit button lives in
-your app, not in the toolbar, so it needs to know the annotation state.
-
-`onAnnotationsChange` fires with a live count of each annotation type, including once on
-mount, so your button starts in the right state:
+Your Submit button lives in your app, not in the toolbar, so it needs to know what is on
+the document. State inside `<PDFViewer>` is unreachable from the component that renders
+it — so `usePdfViewer()` creates a handle that owns the state, and you pass it in.
 
 ```jsx
-const [counts, setCounts] = useState({ image: 0, text: 0, ink: 0, total: 0 })
+import { PDFViewer, usePdfViewer, useViewerState } from '@armsolusi/pdf-viewer'
 
-<PDFViewer
-  ref={viewer}
-  src={documentUrl}
-  config={{ workerSrc, onAnnotationsChange: setCounts }}
-/>
+function ReviewDocument() {
+  const viewer = usePdfViewer()
+  const { hasSpecimen, hasAnnotation } = useViewerState(viewer)
 
-<button disabled={counts.total === 0} onClick={submitRevision}>
-  Submit revision
-</button>
-{counts.total === 0 && <p>Mark up the document before submitting.</p>}
+  return (
+    <>
+      <PDFViewer viewer={viewer} src={url} config={{ specimenAsset }} />
+
+      <button disabled={!hasSpecimen} onClick={submit}>Submit signed</button>
+      <button disabled={!hasAnnotation} onClick={submit}>Submit reviewed</button>
+    </>
+  )
+}
 ```
 
-The counts go back down when annotations are removed, so a reviewer who deletes their
-last mark is blocked again.
+The handle's identity never changes, so passing it as a prop does not re-render the
+viewer, and it is safe in a dependency array. Every method on it is also safe to call
+before the viewer has mounted — it is a no-op, not a crash — so a toolbar of your own
+needs no readiness check.
 
-To require a *specific kind* of markup, read the individual counts — `counts.ink > 0` for
-freehand marks, `counts.image > 0` for a signature, and so on.
+**Pass a selector** when you only read part of the state. Without one your component
+re-renders on every change, including `scale` ticking through a pinch gesture:
+
+```jsx
+const canSubmit = useViewerState(viewer, (s) => s.hasAnnotation)
+```
+
+Return a primitive or a stable reference from a selector. One that builds a fresh object
+(`(s) => ({ ink: s.counts.ink })`) is never equal to the last, so it re-renders on every
+change — read `counts` itself instead.
+
+### `hasSpecimen` and `hasAnnotation` are independent
+
+Some documents need a signature and nothing else; others need a hand-written note and no
+signature at all. So they are two separate flags, not two readings of one count:
+
+| | Counts towards |
+| --- | --- |
+| Stamp from `specimenAsset` | `hasSpecimen` |
+| Stamp from `stampAssets` (a seal, a logo) | neither |
+| Image the user uploaded from disk | neither |
+| Freehand ink | `hasAnnotation` |
+| Text box | `hasAnnotation` |
+
+An image stamp never counts as an annotation, and only a *specimen* image counts as a
+signature. That distinction is why stamp assets carry a `kind`: a seal and a signature are
+both image annotations, so counting images cannot tell them apart. If you register several
+signature images instead of using `specimenAsset`, mark them yourself:
+
+```js
+stampAssets: [
+  { id: 'director', kind: 'specimen', src: '/director.png' },
+  { id: 'seal', src: '/seal.png' },
+]
+```
+
+### The whole state
+
+`status`, `error`, `pageCount`, `activePageIndex`, `scale`, `zoomMode`, `hasSpecimen`,
+`hasAnnotation`, `counts`, `canUndo`, `canRedo`, `isDrawMode`, `selectedId`,
+`showThumbnails`.
+
+`counts` is `{ specimen, stamp, image, text, ink, total }`, where
+`specimen + stamp === image`.
+
+### Driving the viewer
+
+Beyond the ref methods, the handle carries everything the toolbar can do — which is what
+makes a toolbar of your own possible:
+
+`reload()`, `uploadStamp(file)`, `duplicateSelected()`, `deleteSelected()`, `zoomIn()`,
+`zoomOut()`, `setScale(n)`, `setZoomMode(mode)`, `goToPage(i)`,
+`rotatePages(delta, scope?)`, `setDrawMode(bool)`, `setInk({ color, thickness, opacity })`,
+`toggleThumbnails()`.
+
+## Customising the toolbar
+
+The bar has two halves. **Navigation** — the thumbnail toggle, page navigation, zoom and
+page rotation — is always there, because it is how a user reads the document rather than
+acts on it, and a viewer nobody can navigate is not a viewer. **Actions**, on the right,
+are yours to arrange.
+
+```jsx
+config={{
+  toolbar: {
+    displayActions: ['history', 'doc-number', 'download'],
+    customToolbarActions: [
+      { id: 'doc-number', label: 'Document number', icon: <Icon />, onClick: insert },
+    ],
+  },
+}}
+```
+
+**The rules — all of which apply to the action row only:**
+
+1. **No `displayActions`** — every action appears in its shipped order, then each of your
+   custom actions after it.
+2. **A `displayActions` list** — only the ids named appear. Anything left out is left
+   out, custom actions included.
+3. **Order follows the list**, exactly as written.
+
+> **`download` is not exempt.** Passing `onDownload` makes the button *available*; naming
+> `download` in `displayActions` makes it *appear*. A list without it has no Download
+> button, however the rest of the config looks.
+
+Naming a navigation control (`zoom`, `thumbnails`, …) in `displayActions` does nothing but
+log a warning in development — the control still renders in its own place. To rearrange
+those, replace the whole bar with `renderToolbar`.
+
+### Action ids
+
+`history`, `draw`, `addText`, `stamp`, `download`.
+
+`history` is a cluster; use `undo` and `redo` to place its halves separately.
+
+`divider` and `spacer` may appear as often as you like. One stranded at either end of the
+row is dropped rather than left dangling against the edge.
+
+### Hiding one action
+
+Filter the exported list instead of writing your own:
+
+```jsx
+import { DEFAULT_TOOLBAR_ACTIONS } from '@armsolusi/pdf-viewer'
+
+toolbar: { displayActions: DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'addText') }
+```
+
+A hand-written list is frozen: actions added in later versions never reach your users.
+Filtering keeps you in step.
+
+### Replacing a built-in button
+
+Give a custom action a built-in action id and it takes that slot — the way to swap Download
+for an upload of your own without giving up the default layout:
+
+```jsx
+toolbar: {
+  customToolbarActions: [{ id: 'download', label: 'Upload', onClick: uploadSigned }],
+}
+```
+
+### Building the bar yourself
+
+`toolbar: false` removes it, leaving you to build one anywhere in your app and drive it
+through the handle. `renderToolbar` keeps it in place but hands over the rendering:
+
+```jsx
+config={{
+  renderToolbar: ({ viewer, state, labels }) => (
+    <MyToolbar
+      onUndo={viewer.undo}
+      canUndo={state.canUndo}
+      onSign={() => viewer.addImageStamp()}
+    />
+  ),
+}}
+```
+
+`viewer` here is a full handle of the same shape `usePdfViewer()` returns, so one toolbar
+component works either way.
+
+## Recipes
 
 ### Upload the signed document instead of downloading it
 
@@ -202,7 +361,7 @@ freehand marks, `counts.image > 0` for a signature, and so on.
 
 ```jsx
 const submitRevision = async () => {
-  const blob = await viewer.current.getFlattenedPDF()
+  const blob = await viewer.getFlattenedPDF()
   const body = new FormData()
   body.append('file', blob, 'revision.pdf')
   await fetch('/api/revisions', { method: 'POST', body })
@@ -218,7 +377,7 @@ see Known limitations.
 ```jsx
 await fetch('/api/annotations', {
   method: 'POST',
-  body: JSON.stringify(viewer.current.getAnnotations()),
+  body: JSON.stringify(viewer.getAnnotations()),
 })
 ```
 
@@ -240,7 +399,7 @@ Pass the strings you want to change; the rest stay English. `DEFAULT_LABELS` is 
 so you can see every key.
 
 ```jsx
-import { DEFAULT_LABELS } from 'react-pdf-viewer-stamping'
+import { DEFAULT_LABELS } from '@armsolusi/pdf-viewer'
 
 config={{
   labels: { download: 'Unduh', addStamp: 'Tambah Stempel', addText: 'Tambah Teks' },

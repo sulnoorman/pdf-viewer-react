@@ -26,7 +26,7 @@ export const FIXTURE_PAGES = [
  */
 export async function createFixturePdf() {
   const pdfDoc = await PDFDocument.create()
-  pdfDoc.setTitle('react-pdf-viewer-stamping test fixture')
+  pdfDoc.setTitle('@armsolusi/pdf-viewer test fixture')
   pdfDoc.setProducer('scripts/make-fixture.mjs')
   // Fixed dates keep the output byte-stable across runs.
   pdfDoc.setCreationDate(new Date(0))

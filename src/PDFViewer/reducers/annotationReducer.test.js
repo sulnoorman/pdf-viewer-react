@@ -48,7 +48,10 @@ describe('factories', () => {
     expect(ink).toMatchObject({ x: 10, y: 5, width: 30, height: 15 })
   })
 
-  it('defaults an image stamp to the registry key used by the single-specimen config', () => {
+  it('defaults an image stamp to an ordinary registry key', () => {
+    // Once the specimen's own reserved id, now just a key. It must stay ordinary:
+    // deriveViewerState reads the asset's `kind`, so a stamp on an unregistered id
+    // can never be mistaken for a signature.
     expect(createImageAnnotation().assetId).toBe('default')
   })
 })
@@ -232,6 +235,24 @@ describe('selectors', () => {
     // This is what replaces onSpecimenChange's image-only count, which locked users
     // who had only drawn or typed out of exporting.
     expect(selectCounts(seeded)).toEqual({ image: 1, text: 1, ink: 1, total: 3 })
+  })
+
+  it('leaves total out of the per-type buckets it sums', () => {
+    /*
+     * `total` used to be incremented outside the type check, and the check itself was
+     * `type in counts` — which is true for 'total'. Either flaw alone let a host
+     * gating Submit on `total > 0` unlock on something that was never drawn.
+     */
+    const state = {
+      byId: { a: { id: 'a', type: 'total' }, b: { id: 'b', type: 'mystery' } },
+      order: ['a', 'b', 'ghost'],
+    }
+    expect(selectCounts(state)).toEqual({ image: 0, text: 0, ink: 0, total: 0 })
+  })
+
+  it('keeps total equal to the sum of the buckets', () => {
+    const { image, text, ink, total } = selectCounts(seeded)
+    expect(image + text + ink).toBe(total)
   })
 })
 

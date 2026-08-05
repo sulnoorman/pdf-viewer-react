@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
-import { configureWorker } from '../utils/worker.js'
+import { configureWorker, describeWorkerFailure } from '../utils/worker.js'
 import { normalizeRotation } from '../utils/coords.js'
 import { normalizePdfSource, copyBytes } from '../utils/source.js'
 import { useLatestRef } from './useLatestRef.js'
@@ -71,7 +71,11 @@ export function usePdfDocument(src, { workerSrc, workerPort, onLoadError } = {})
         if (cancelled || err?.name === 'RenderingCancelledException') return
         // Previously there was no catch at all: a bad URL or a corrupt file left the
         // viewer on a blank dark screen with the reason only in the console.
-        console.error('[react-pdf-viewer-stamping] Failed to load document:', err)
+        //
+        // Worker failures get an extra paragraph: pdf.js reports them as "Setting up
+        // fake worker failed", which names no cause and no fix.
+        err.message = describeWorkerFailure(err)
+        console.error('[@armsolusi/pdf-viewer] Failed to load document:', err)
         setLoaded({ ...IDLE, status: 'error', error: err })
         onLoadErrorRef.current?.(err)
       }

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { PDFViewer } from '../src/index.js'
 
-// Vite resolves this to a real file; see the README for the webpack and Next.js forms.
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+// Nothing here configures a worker. The package ships one, so these stories exercise the
+// same zero-config path a consumer gets.
 
 export const SAMPLE_PDF = '/sample.pdf'
 export const SAMPLE_SIGNATURE = '/Tandatangan.png'
@@ -52,7 +52,6 @@ export function ViewerHarness({
           ref={viewer}
           src={src}
           config={{
-            workerSrc,
             onAnnotationsChange: setCounts,
             onDownload: onExport === null ? undefined : download,
             canDownload: counts.total > 0,
