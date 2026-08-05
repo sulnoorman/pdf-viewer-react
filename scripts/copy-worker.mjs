@@ -2,7 +2,7 @@
  * Copy the pdf.js worker, and the one module that references it, into dist/.
  *
  * Both are copied rather than bundled. `workerUrl.js` holds a
- * `new URL('./pdf.worker.min.mjs', import.meta.url)` that must survive to the consumer's
+ * `new URL('./pdf.worker.min.js', import.meta.url)` that must survive to the consumer's
  * bundler untouched: Vite library mode would otherwise resolve it at our build time and
  * inline 1.2 MB as base64. See src/PDFViewer/utils/workerUrl.js for the full reasoning.
  *
@@ -16,8 +16,18 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-const WORKER = 'pdf.worker.min.mjs'
-const source = resolve(root, 'node_modules/pdfjs-dist/build', WORKER)
+/*
+ * Copied under `.js`, not the `.mjs` pdfjs-dist ships.
+ *
+ * Many web servers, nginx included, have no MIME mapping for `.mjs` and serve it as
+ * `application/octet-stream` — which browsers refuse to execute as a module. That failed
+ * only in production, on a file that downloaded perfectly, and every consumer would have
+ * had to diagnose it against their own infrastructure. The extension does not affect the
+ * contents being an ES module.
+ */
+const SOURCE_WORKER = 'pdf.worker.min.mjs'
+const WORKER = 'pdf.worker.min.js'
+const source = resolve(root, 'node_modules/pdfjs-dist/build', SOURCE_WORKER)
 const workerUrlModule = resolve(root, 'src/PDFViewer/utils/workerUrl.js')
 
 const pkg = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))

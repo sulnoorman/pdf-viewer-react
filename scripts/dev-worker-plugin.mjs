@@ -4,8 +4,17 @@ import { resolve, dirname, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const WORKER = resolve(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs')
-const WORKER_FILE = 'pdf.worker.min.mjs'
+
+/**
+ * pdfjs-dist ships the worker as `.mjs`; it is served and copied as `.js`.
+ *
+ * Many web servers — nginx among them — have no MIME mapping for `.mjs` and serve it as
+ * `application/octet-stream`, which browsers refuse to execute as a module. That failed in
+ * production only, on a file that downloaded perfectly. See src/PDFViewer/utils/workerUrl.js.
+ */
+const SOURCE_WORKER = 'pdf.worker.min.mjs'
+const WORKER_FILE = 'pdf.worker.min.js'
+const WORKER = resolve(root, 'node_modules/pdfjs-dist/build', SOURCE_WORKER)
 
 /**
  * Make the pdf.js worker reachable to anything running this repo's *source*.
@@ -56,7 +65,7 @@ export function devWorkerPlugin() {
       })
     },
 
-    /** Dev server — the request arrives as `/src/PDFViewer/utils/pdf.worker.min.mjs`. */
+    /** Dev server — the request arrives as `/src/PDFViewer/utils/pdf.worker.min.js`. */
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url?.split('?')[0].endsWith(`/${WORKER_FILE}`)) return next()

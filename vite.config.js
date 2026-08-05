@@ -66,7 +66,7 @@ export default defineConfig(({ command }) => ({
           Kept out of the bundle on purpose, and copied into dist/ verbatim by
           scripts/copy-worker.mjs.
 
-          It holds `new URL('./pdf.worker.min.mjs', import.meta.url)`. Bundled, Vite would
+          It holds `new URL('./pdf.worker.min.js', import.meta.url)`. Bundled, Vite would
           resolve that here and inline 1.2 MB as base64 — the bug that once took this
           package from 36 kB to 1.7 MB. External, the expression reaches the consumer's
           bundler intact, where a path relative to the module works on both Vite and

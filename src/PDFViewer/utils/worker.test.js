@@ -48,7 +48,7 @@ describe('configureWorker', () => {
     // The whole point of shipping one: a host that configures nothing still gets a
     // working viewer, rather than a document that silently never loads.
     configureWorker({})
-    expect(pdfjsLib.GlobalWorkerOptions.workerSrc).toMatch(/pdf\.worker\.min\.mjs$/)
+    expect(pdfjsLib.GlobalWorkerOptions.workerSrc).toMatch(/pdf.worker.min.js$/)
     expect(warn).not.toHaveBeenCalled()
   })
 
@@ -60,13 +60,19 @@ describe('configureWorker', () => {
 })
 
 describe('describeWorkerFailure', () => {
-  it('explains a worker failure and names the fix', () => {
-    // pdf.js says only "Setting up fake worker failed: error loading dynamically
-    // imported module: …", which names neither cause nor remedy.
+  it('names both real causes, not just one', () => {
+    /*
+     * pdf.js says only "Setting up fake worker failed: error loading dynamically imported
+     * module: …". This message used to blame Vite's dep optimizer alone, and sent a team
+     * looking there while the actual cause was nginx serving the worker as
+     * application/octet-stream — a file that downloaded perfectly every time.
+     */
     const message = describeWorkerFailure(
       new Error('Setting up fake worker failed: "error loading dynamically imported module".')
     )
+    expect(message).toContain('404')
     expect(message).toContain('optimizeDeps')
+    expect(message).toContain('Content-Type')
     expect(message).toContain('workerSrc')
   })
 
@@ -92,7 +98,7 @@ describe('the bundled worker URL', () => {
      * inside this package instead of being read out of pdfjs-dist at runtime.
      */
     const code = await readWorkerUrlCode()
-    expect(code).toContain("new URL('./pdf.worker.min.mjs', import.meta.url)")
+    expect(code).toContain("new URL('./pdf.worker.min.js', import.meta.url)")
     expect(code).not.toContain('pdfjs-dist')
   })
 
@@ -115,25 +121,25 @@ describe('correctOptimizedDepUrl', () => {
      * dev" to find, so the mapping is pinned here.
      */
     expect(
-      correctOptimizedDepUrl('http://localhost:5173/node_modules/.vite/deps/pdf.worker.min.mjs')
-    ).toBe('http://localhost:5173/node_modules/@armsolusi/pdf-viewer/dist/pdf.worker.min.mjs')
+      correctOptimizedDepUrl('http://localhost:5173/node_modules/.vite/deps/pdf.worker.min.js')
+    ).toBe('http://localhost:5173/node_modules/@armsolusi/pdf-viewer/dist/pdf.worker.min.js')
   })
 
   it('preserves a base path', () => {
     // Real report came from an app served under /service/prepare-sharing/.
     expect(
-      correctOptimizedDepUrl('http://localhost:5174/service/app/node_modules/.vite/deps/pdf.worker.min.mjs')
-    ).toBe('http://localhost:5174/service/app/node_modules/@armsolusi/pdf-viewer/dist/pdf.worker.min.mjs')
+      correctOptimizedDepUrl('http://localhost:5174/service/app/node_modules/.vite/deps/pdf.worker.min.js')
+    ).toBe('http://localhost:5174/service/app/node_modules/@armsolusi/pdf-viewer/dist/pdf.worker.min.js')
   })
 
   it('leaves a production asset URL untouched', () => {
     // There the bundler already emitted a real file next to the app's other assets.
-    const built = 'https://example.com/assets/pdf.worker.min-DEtVeC4l.mjs'
+    const built = 'https://example.com/assets/pdf.worker.min-DEtVeC4l.js'
     expect(correctOptimizedDepUrl(built)).toBe(built)
   })
 
   it('leaves an unrecognised layout alone rather than guessing', () => {
-    const odd = 'http://localhost:3000/some/other/place/pdf.worker.min.mjs'
+    const odd = 'http://localhost:3000/some/other/place/pdf.worker.min.js'
     expect(correctOptimizedDepUrl(odd)).toBe(odd)
   })
 

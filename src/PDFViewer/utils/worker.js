@@ -34,6 +34,7 @@ let warned = false
 /** Where Vite's dep optimizer parks pre-bundled dependencies. */
 const OPTIMIZED_DEPS_DIR = '/.vite/deps/'
 const PACKAGE_DIST = '/@armsolusi/pdf-viewer/dist/'
+const WORKER_FILE = 'pdf.worker.min.js'
 
 /**
  * Undo the relocation Vite's dev server performs on pre-bundled dependencies.
@@ -52,9 +53,9 @@ const PACKAGE_DIST = '/@armsolusi/pdf-viewer/dist/'
  * @param {string} url
  */
 export function correctOptimizedDepUrl(url) {
-  const marker = `${OPTIMIZED_DEPS_DIR}pdf.worker.min.mjs`
+  const marker = `${OPTIMIZED_DEPS_DIR}${WORKER_FILE}`
   if (!url?.includes(marker)) return url
-  return url.replace(marker, `${PACKAGE_DIST}pdf.worker.min.mjs`)
+  return url.replace(marker, `${PACKAGE_DIST}${WORKER_FILE}`)
 }
 
 const bundledWorkerUrl = correctOptimizedDepUrl(resolvedWorkerUrl)
@@ -111,12 +112,20 @@ export function configureWorker({ workerSrc, workerPort } = {}) {
  * Turn a worker-loading failure into something a developer can act on.
  *
  * pdf.js reports these as "Setting up fake worker failed: error loading dynamically
- * imported module: …", which says nothing about the cause. The cause is almost always a
- * bundler that relocated our module without bringing the worker file along — Vite's dep
- * optimizer is the usual culprit, and ./workerUrl.js already corrects its default layout.
+ * imported module: …", which names neither the cause nor a fix. There are only two real
+ * causes, and they are told apart by whether the URL 404s:
  *
- * Returns the original message unchanged for every other kind of load error, so a 404 on
- * the document itself still reads as a 404.
+ *   - the file is not there — a bundler moved our module without bringing the worker
+ *     along, Vite's dev optimizer being the usual culprit
+ *   - the file is there but served with the wrong Content-Type, so the browser refuses to
+ *     execute it as a module
+ *
+ * Both were found in the field, and the second is the one this message used to send people
+ * the wrong way: it blamed Vite while the actual problem was nginx serving the worker as
+ * `application/octet-stream`.
+ *
+ * Returns the original message unchanged for any other load error, so a 404 on the
+ * document itself still reads as a 404.
  */
 export function describeWorkerFailure(error) {
   const message = error?.message ?? ''
@@ -124,9 +133,13 @@ export function describeWorkerFailure(error) {
 
   return (
     `${message}\n\n` +
-    'The pdf.js worker shipped with @armsolusi/pdf-viewer could not be loaded. If you ' +
-    'are on Vite, add:\n\n' +
-    "  optimizeDeps: { exclude: ['@armsolusi/pdf-viewer'] }\n\n" +
-    'to vite.config.js. Otherwise serve a copy yourself and pass config.workerSrc.'
+    "The pdf.js worker shipped with @armsolusi/pdf-viewer could not be loaded. Open that " +
+    'URL directly and check two things:\n\n' +
+    '  1. Does it return the file, or a 404? If it 404s and you are on the Vite dev ' +
+    "server, add optimizeDeps: { exclude: ['@armsolusi/pdf-viewer'] } to vite.config.js.\n" +
+    '  2. What Content-Type does it come back with? It must be a JavaScript type. Servers ' +
+    'that answer application/octet-stream — nginx does this for extensions it does not ' +
+    'recognise — make the browser refuse to run it.\n\n' +
+    'Failing both, serve a copy yourself and pass it as config.workerSrc.'
   )
 }

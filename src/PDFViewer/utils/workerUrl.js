@@ -20,8 +20,15 @@
 /*
  * Deliberately one line and no logic.
  *
+ * Note the `.js` extension: pdfjs-dist ships this file as `.mjs`, and it is copied under a
+ * different name on purpose. A great many web servers — nginx among them — have no MIME
+ * mapping for `.mjs` and serve it as `application/octet-stream`, which browsers refuse to
+ * execute as a module. The symptom is pdf.js reporting "Setting up fake worker failed" in
+ * production only, on a file that downloads perfectly. `.js` is served correctly
+ * everywhere, and the extension has no bearing on the contents being an ES module.
+ *
  * This module is not bundled and not covered by unit tests — everything it could get
  * wrong would only surface in a consumer's app. Correcting the URL is worth doing but
  * belongs in ./worker.js, which is bundled and tested; see correctOptimizedDepUrl there.
  */
-export const resolvedWorkerUrl = new URL('./pdf.worker.min.mjs', import.meta.url).href
+export const resolvedWorkerUrl = new URL('./pdf.worker.min.js', import.meta.url).href

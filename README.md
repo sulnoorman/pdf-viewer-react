@@ -82,9 +82,9 @@ export function SignDocument() {
 
 The viewer fills its container, so give the parent a height.
 
-**Two things the library deliberately does not do:** it never downloads the file for you
-(`onDownload` is yours to implement, which is what makes uploading instead of saving
-possible), and it never bundles the pdf.js worker.
+**The one thing the library deliberately does not do** is save the file. `onDownload` is
+yours to implement, which is what makes uploading the signed document just as natural as
+downloading it.
 
 ## The pdf.js worker
 
@@ -102,25 +102,40 @@ versions differ, and a range would let npm install a mismatched pair.
 The worker is about 1.2 MB, emitted as its own file and fetched only when a document
 loads — it never enters your main bundle.
 
-**If the document fails with "Setting up fake worker failed"** on the Vite dev server,
-your setup has moved the package somewhere the built-in correction does not anticipate.
-Add one line to `vite.config.js`:
+### "Setting up fake worker failed"
+
+pdf.js's message for this names no cause. Open the URL it prints and check two things.
+
+**Does it 404?** Then a bundler moved the library without bringing the worker along. On
+the Vite dev server, add one line to `vite.config.js`:
 
 ```js
 optimizeDeps: { exclude: ['@armsolusi/pdf-viewer'] }
 ```
 
-Vite's dev server pre-bundles dependencies into `node_modules/.vite/deps/`, which relocates
-the module without copying the worker beside it. The library maps the usual layout back
-automatically, so this is a fallback rather than a required step — and it affects the dev
-server only; production builds emit the worker as a normal asset.
+Vite pre-bundles dependencies into `node_modules/.vite/deps/`, which relocates the module
+without copying the worker beside it. The library maps the usual layout back automatically,
+so this is a fallback rather than a required step, and it affects the dev server only.
+
+**Does it return the file but with `Content-Type: application/octet-stream`?** Then your
+web server is refusing to call it JavaScript, and the browser will not execute a module
+served as a binary. The worker ships as `.js` — rather than the `.mjs` pdfjs-dist uses —
+precisely so this does not happen, because nginx and friends have no MIME mapping for
+`.mjs`. If you see it anyway, add a mapping for whatever extension is being served:
+
+```nginx
+types { application/javascript js mjs; }
+```
+
+This one only ever appears in production, on a file that downloads perfectly, which is
+what makes it worth knowing about in advance.
 
 **Overriding it.** Pass `config.workerSrc` to point at a copy you serve yourself, or
 `config.workerPort` for a `Worker` you constructed:
 
 ```jsx
 // self-hosted, e.g. copied into public/ by your build
-config={{ workerSrc: '/pdf.worker.min.mjs' }}
+config={{ workerSrc: '/pdf.worker.min.js' }}
 ```
 
 Both take precedence over the bundled copy. If you already load pdfjs-dist yourself and

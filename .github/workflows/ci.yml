@@ -65,5 +65,5 @@ jobs:
           size=$(stat -c%s dist/pdf-viewer.js)
           echo "dist/pdf-viewer.js is $size bytes"
           test "$size" -lt 200000 || { echo "Bundle far larger than expected — worker inlined?"; exit 1; }
-          test -f dist/pdf.worker.min.mjs || { echo "Bundled worker missing from dist/"; exit 1; }
+          test -f dist/pdf.worker.min.js || { echo "Bundled worker missing from dist/"; exit 1; }
           test ! -d dist/assets || { echo "dist/assets/ should not exist — duplicate worker?"; exit 1; }

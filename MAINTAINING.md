@@ -76,6 +76,55 @@ distributed. **GitHub Packages** if it must be private: free with a private repo
 the scope has to match the repository owner, so it needs a GitHub organisation actually
 named `armsolusi`. Either way, delete `scripts/release-git.mjs` and use the flow below.
 
+## Changing how it is distributed
+
+Consumers never change their `import` statements: the package name and API stay the same.
+Only the dependency specifier in their `package.json` moves.
+
+| Where it lives | What consumers write |
+| --- | --- |
+| Public git tag (today) | `"git+https://github.com/OWNER/REPO.git#v0.1.0"` |
+| Private git tag | `"git+ssh://git@github.com/OWNER/REPO.git#v0.1.0"` |
+| npm, or GitHub Packages | `"^0.1.0"` |
+
+### Do the repository move before people pin the URL
+
+Every possible destination — a dedicated repository, a private one, GitHub Packages —
+converges on the same prerequisite: a **GitHub organisation named `armsolusi`**. GitHub
+Packages requires it outright, because a package's scope must match the repository owner,
+so `@armsolusi/pdf-viewer` cannot be published from a personal account.
+
+Moving now costs nothing. Moving after several applications have pinned the old URL is a
+coordinated change across all of them.
+
+Use GitHub's **Transfer**, not a fresh repository: transfer carries the tags, history and
+issues, and installs redirects so existing installs keep resolving. A copied repository
+loses the `v0.1.0` tag people are pinning. Those redirects last only until something else
+claims the old name, so never create a new repository with the old name afterwards.
+
+### Going private while people are already installing
+
+Existing `node_modules` keep working, but **the next `bun install` anywhere fails** —
+every CI job, every fresh clone, every new colleague. Anonymous `git+https://` becomes an
+authentication error the moment visibility flips. So the specifier has to change to
+`git+ssh://` in every consuming application *at the same time* as the flip; plan it, do not
+discover it.
+
+Do not embed a token in the URL. `git+https://TOKEN@github.com/…` works and then gets
+committed to their `package.json`.
+
+Access, once private:
+
+- **In an organisation** — grant one team read access; people join and leave the team
+  without anyone touching the repository.
+- **On a personal account** — collaborators added one at a time, with nothing to revoke
+  against when someone leaves. This is the other reason to move to an organisation.
+- **CI** — a read-only deploy key per repository, or a fine-grained token. Never a
+  person's account.
+
+Verify `git+ssh://` with one colleague before asking everyone to switch: it depends on
+their having an SSH key on a GitHub account with access, which is not a given.
+
 ## Releasing
 
 ```bash
