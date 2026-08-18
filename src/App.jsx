@@ -133,54 +133,77 @@ export default function App() {
   const ready = status === 'ready'
 
   return (
-    <div className="w-screen h-screen bg-gray-100 flex flex-col">
-      <div className="flex-1 min-h-0">
-        <PDFViewer
-          viewer={viewer}
-          src="/signed-document.pdf"
-          config={{
-            labels: LABELS,
+    <div className="w-screen h-screen overflow-auto bg-gray-100 flex flex-col relative">
+      {/*
+        A sticky navbar, which is what surfaced the stacking bug.
 
-            /* The signature. Only stamps placed from this satisfy `hasSpecimen`. */
-            specimenAsset: SPECIMEN,
+        Three things it needs, and only the third is the library's business:
+          - `sticky top-0` so it stays put while the page scrolls
+          - `bg-white`, or it is transparent and annotations show through it however the
+            layers are ordered
+          - `z-10`, because a positioned element with `z-index: auto` is painted in DOM
+            order — and the viewer comes after this, so it would win regardless. The
+            viewer now isolates its own layers, so this number is all it takes.
+      */}
+      <div className="sticky top-0 z-10 w-full border-b bg-white p-3">
+        <p className="text-black">Sticky Navbar</p>
+      </div>
 
-            /* Extra images the host offers. These are stamps, never specimens. */
-            stampAssets: [{ id: 'seal', label: 'Cap perusahaan', src: SPECIMEN }],
+      {/*
+        Deliberately no fixed height on this wrapper, so the HOST PAGE scrolls rather than
+        the viewer — the arrangement that puts annotations up in the navbar's band in the
+        first place. Give it a height (`h-[80vh]`, say) and the viewer scrolls internally
+        instead, which is the better default; this stays as the harder case to get right.
+      */}
+      <div className="p-3">
+        <div className="flex-1 min-h-0">
+          <PDFViewer
+            viewer={viewer}
+            src="/signed-document.pdf"
+            config={{
+              labels: LABELS,
 
-            allowMultipleStamps: true,
-            maxStamps: 5,
+              /* The signature. Only stamps placed from this satisfy `hasSpecimen`. */
+              specimenAsset: SPECIMEN,
 
-            /* Supplying onDownload is what renders the Download button. */
-            onDownload: handleDownload,
-            canDownload: ready && counts.total > 0,
+              /* Extra images the host offers. These are stamps, never specimens. */
+              stampAssets: [{ id: 'seal', label: 'Cap perusahaan', src: SPECIMEN }],
 
-            toolbar: {
-              /*
-               * Everything except page rotation, plus one action of our own.
-               *
-               * Filtering the exported default rather than writing the list by hand
-               * keeps this in step with controls added in later versions. Only the
-               * right-hand action row is configurable — thumbnails, page navigation and
-               * zoom are always present.
-               */
-              displayActions: [
-                ...DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'image'),
-                'ambil-nomor',
-              ],
-              customToolbarActions: [
-                {
-                  id: 'ambil-nomor',
-                  label: 'Ambil Nomor',
-                  icon: <IconFileText size={16} stroke={2} />,
-                  disabled: !ready,
-                  onClick: addDocumentNumber,
-                },
-              ],
-            },
+              allowMultipleStamps: true,
+              maxStamps: 5,
 
-            onLoadError: (error) => setMessage(`Gagal memuat: ${error.message}`),
-          }}
-        />
+              /* Supplying onDownload is what renders the Download button. */
+              onDownload: handleDownload,
+              canDownload: ready && counts.total > 0,
+
+              toolbar: {
+                /*
+                 * Everything except page rotation, plus one action of our own.
+                 *
+                 * Filtering the exported default rather than writing the list by hand
+                 * keeps this in step with controls added in later versions. Only the
+                 * right-hand action row is configurable — thumbnails, page navigation and
+                 * zoom are always present.
+                 */
+                displayActions: [
+                  ...DEFAULT_TOOLBAR_ACTIONS.filter((id) => id !== 'image'),
+                  'ambil-nomor',
+                ],
+                customToolbarActions: [
+                  {
+                    id: 'ambil-nomor',
+                    label: 'Ambil Nomor',
+                    icon: <IconFileText size={16} stroke={2} />,
+                    disabled: !ready,
+                    onClick: addDocumentNumber,
+                  },
+                ],
+              },
+
+              onLoadError: (error) => setMessage(`Gagal memuat: ${error.message}`),
+            }}
+          />
+        </div>
       </div>
 
       {/*

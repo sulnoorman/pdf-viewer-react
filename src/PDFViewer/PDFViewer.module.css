@@ -7,6 +7,21 @@
   background: var(--rpvs-bg);
   color: var(--rpvs-text);
   font-family: var(--rpvs-font);
+
+  /*
+   * Do not remove. This is what stops a selected annotation painting over the host
+   * application's sticky navbar.
+   *
+   * The library uses z-index internally — 50 on a selected annotation and on popovers, 10
+   * on the toolbar. Without a stacking context here those values compete in the *host
+   * page's* root stacking context, so a selected stamp sat above any navbar below z-index
+   * 50 and raising the navbar's z-index appeared to do nothing.
+   *
+   * `isolation` rather than `position: relative; z-index: 0`: it creates the stacking
+   * context without touching positioning, so no absolutely positioned descendant changes
+   * containing block and nothing shifts.
+   */
+  isolation: isolate;
 }
 
 .body {

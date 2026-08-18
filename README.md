@@ -513,6 +513,43 @@ Tokens cover surfaces (`--rpvs-bg`, `--rpvs-toolbar-bg`, `--rpvs-sidebar-bg`), c
 (`--rpvs-control-bg`, `--rpvs-control-border`), text (`--rpvs-text`,
 `--rpvs-text-muted`) and accents (`--rpvs-accent`, `--rpvs-selection`).
 
+## Putting your own UI over the viewer
+
+The viewer isolates its own stacking context, so its internal layering never competes with
+yours. A navbar, modal or dropdown of yours goes on top with an ordinary `z-index`:
+
+```css
+.my-navbar {
+  position: sticky;   /* required — z-index is ignored on a static element */
+  top: 0;
+  z-index: 10;        /* any value ≥ 1 */
+  background: #fff;   /* or it is transparent and the document shows through */
+}
+```
+
+**`position` is the part people miss.** `z-index` has no effect at all on a `position:
+static` element, which is why "I set a z-index and nothing changed" is almost always this
+rather than a stacking problem. `position: sticky` or `relative` is enough.
+
+`z-index: auto` on a positioned element is also not enough: elements at `auto` are painted
+in DOM order, and the viewer usually comes after your navbar in the tree. Give it a number.
+
+### Give the viewer's container a height
+
+Worth repeating here because it changes which element scrolls. With a fixed height, the
+viewer scrolls internally and its content stays inside its own box:
+
+```jsx
+<div style={{ height: '80vh' }}>
+  <PDFViewer … />
+</div>
+```
+
+Without one, the viewer grows as tall as the whole document and **the page** scrolls
+instead. Everything still works, but the viewer's content travels up behind whatever you
+have pinned to the top of the window — so this is the case where the layering above starts
+to matter.
+
 ## Known limitations
 
 - Annotations are **flattened** into page content on export, so they cannot be edited

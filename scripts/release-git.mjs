@@ -88,13 +88,25 @@ Done, locally. Nothing has been pushed.
 
 To publish it:
 
+  git push origin ${startingBranch}
   git push -f origin ${RELEASE_BRANCH}
   git push origin ${tag}
 
-Then your team installs:
+The first one matters as much as the others: without it the tag points at a source commit
+nobody else can see, so the release exists but the work behind it does not.
+
+Then your team installs it, either way:
 
   bun add git+${repo}.git#${tag}
   # or: npm install ${repo}.git#${tag}
+
+  # or put it in package.json and run \`bun install\`
+  "${pkg.name}": "git+${repo}.git#${tag}"
+
+Both work. The second is the one to reach for if \`bun add\` fails with ENOTEMPTY: on Windows
+bun cannot rename over an entry already in its global cache, which happens when it has
+fetched that commit before. \`bun install\` reads the cache instead of re-extracting, so it
+is unaffected. Clearing the entry also fixes it: rm -rf ~/.bun/install/cache/@GH@*
 
 Pin the tag, not the branch. A branch reference resolves to whatever it points at now, so
 two people installing on different days get different builds with no way to tell.

@@ -2,8 +2,16 @@
 
 ## Unreleased
 
-The package has not been published yet, so the breaking changes below cost nothing to
-make now — and would have been expensive later.
+## 0.1.2
+
+Distributed as a git tag, not on a registry yet — see MAINTAINING.md. Everything below
+accumulated across `0.1.0`–`0.1.2`, which were all pre-release tags; the breaking changes
+cost nothing while nobody outside the team was consuming it, and would have been expensive
+later.
+
+**No change is needed in consuming applications.** If a sticky navbar of yours was being
+painted over by a selected annotation, reinstalling is enough — the `z-index` you already
+have on it now takes effect.
 
 ### Renamed
 
@@ -41,6 +49,13 @@ make now — and would have been expensive later.
   you set yourself is still respected.
 
 ### Fixed after first testing in a real app
+
+- **A selected annotation painted over the host application's sticky navbar**, and raising
+  the navbar's `z-index` appeared to do nothing. The viewer did not establish a stacking
+  context, so its internal values — 50 on a selected annotation and on popovers, 10 on the
+  toolbar — competed in the *host page's* root stacking context. The viewer now isolates
+  its layers, so it behaves as one layer and an ordinary `z-index` on your own overlay
+  works. See "Putting your own UI over the viewer" in the README.
 
 - **Vite's dev server broke the bundled worker.** It pre-bundles dependencies into
   `node_modules/.vite/deps/`, which relocates the module without copying the worker beside
