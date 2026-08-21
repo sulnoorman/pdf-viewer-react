@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.1.3
+
+### Changed
+
+- **With two pages on screen, the later one is now the active page** — the page a new
+  stamp or text box lands on. Scrolling down until the next page appeared and then
+  stamping used to put the stamp on the page above, so it had to be fetched by scrolling
+  back. A page must cover at least a quarter of the viewport to qualify, so a sliver at
+  the bottom edge does not steal it.
+
+### Fixed
+
+- **The active page was unstable at a fixed scroll position** — the same view reported
+  page 1 or page 2 depending on how you had scrolled to it. Two causes, both now gone:
+  it was decided from the `IntersectionObserver` entries of a single callback, which
+  carries only the pages that just crossed a threshold rather than the whole picture; and
+  it compared `intersectionRatio`, a fraction of the *page*, so a short page fully in view
+  outranked a tall page filling the screen. Coverage is now measured directly against the
+  viewport, from every page, on scroll.
+
 ## 0.1.2
 
 Distributed as a git tag, not on a registry yet — see MAINTAINING.md. Everything below

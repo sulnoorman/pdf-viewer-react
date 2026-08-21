@@ -40,13 +40,28 @@ class FakeIntersectionObserver {
 function makePageElement(index) {
   const el = document.createElement('div')
   el.dataset.pageIndex = String(index)
-  el.getBoundingClientRect = () => ({ top: index * 800, left: 0, right: 500, bottom: index * 800 + 700 })
+  el.getBoundingClientRect = () => ({
+    top: index * 800,
+    left: 0,
+    right: 500,
+    bottom: index * 800 + 700,
+    height: 700,
+  })
   return el
 }
 
 function setup(pageCount = 10) {
   const container = document.createElement('div')
-  container.getBoundingClientRect = () => ({ top: 0, left: 0, right: 500, bottom: 600 })
+  // `height` matters: the active page is chosen from the fraction of the viewport a page
+  // covers, so a rect without it measures nothing. A real getBoundingClientRect always
+  // has one — only this stub could omit it.
+  container.getBoundingClientRect = () => ({
+    top: 0,
+    left: 0,
+    right: 500,
+    bottom: 600,
+    height: 600,
+  })
   container.scrollTop = 0
 
   const containerRef = { current: container }
@@ -92,7 +107,18 @@ describe('usePageVisibility', () => {
     expect(latestObserver().observed.size).toBe(4)
   })
 
-  it('picks the most-covered page as active', () => {
+  it('does not let an observer callback alone decide the active page', () => {
+    /*
+     * The cause of the reported "sometimes page 1, sometimes page 2".
+     *
+     * An observer callback carries only the pages that just crossed a threshold, so a
+     * page crossing on its own used to win outright — even against a page filling the
+     * screen, simply because that one was not in the same batch. The active page is now
+     * measured from the live geometry of every page, so this batch changes nothing:
+     * only page 0 is actually within the viewport here.
+     *
+     * The rule for which page wins is covered in usePageVisibility.test.jsx.
+     */
     const { view } = setup()
     act(() =>
       latestObserver().emit([
@@ -100,13 +126,16 @@ describe('usePageVisibility', () => {
         { index: 4, ratio: 0.7 },
       ])
     )
-    expect(view.result.current.activePageIndex).toBe(4)
+    expect(view.result.current.activePageIndex).toBe(0)
   })
 
-  it('keeps activePageRef in step for imperative callers', () => {
-    // This is what decides which page a newly added stamp lands on.
+  it('keeps activePageRef in step with the rendered index', () => {
+    // The ref is what decides which page a newly added stamp lands on, and it is read
+    // imperatively — so it drifting out of step would be invisible until a stamp
+    // appeared on the wrong page.
     const { view } = setup()
-    act(() => latestObserver().emit([{ index: 6, ratio: 1 }]))
+    act(() => view.result.current.scrollToPage(6))
+    expect(view.result.current.activePageIndex).toBe(6)
     expect(view.result.current.activePageRef.current).toBe(6)
   })
 

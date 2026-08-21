@@ -4,6 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 export const RENDER_MARGIN_PAGES = 2
 
 /**
+ * How much of the viewport a page must cover to be eligible as the active page.
+ *
+ * The active page decides where a new stamp lands, so "which page am I looking at?" has
+ * to match where the user is about to sign. With two pages on screen the *later* one
+ * wins — scrolling down to reach a page and then having the stamp land on the one above
+ * meant scrolling again to fetch it.
+ *
+ * The floor is what keeps that from being annoying in the other direction: a sliver of
+ * the next page at the bottom edge must not steal the active page, or typing a page
+ * number would appear to jump to the next one.
+ */
+export const ACTIVE_PAGE_MIN_COVERAGE = 0.25
+
+/**
  * Which page the user is looking at, and which pages are worth rendering.
  *
  * One IntersectionObserver drives three things that used to be either missing or
@@ -27,18 +41,81 @@ export function usePageVisibility({ pageCount, container, containerRef }) {
   const elementsRef = useRef(new Map())
   const observerRef = useRef(null)
 
-  const registerPage = useCallback((pageIndex, element) => {
-    const elements = elementsRef.current
-    const previous = elements.get(pageIndex)
-    if (previous && observerRef.current) observerRef.current.unobserve(previous)
+  /**
+   * Pick the active page from the live geometry of every registered page.
+   *
+   * Measured here rather than read from IntersectionObserver entries, for two reasons
+   * that together produced "sometimes page 1, sometimes page 2" from the same scroll
+   * position:
+   *
+   *   1. An observer callback carries only the pages that just crossed a threshold, so
+   *      deciding from `entries` decides from a fragment of the picture. A page crossing
+   *      0.25 on its own would win against a page covering most of the screen, simply
+   *      because the other page was not in that batch.
+   *   2. `intersectionRatio` is a fraction of the *element*, not of the viewport. A short
+   *      page fully in view scores 1.0 while a tall page filling the screen scores 0.6,
+   *      so the short one won while occupying less of it.
+   *
+   * Coverage here is the fraction of the viewport's height the page occupies, which is
+   * what "how much of this page am I looking at" actually means.
+   */
+  const measureActivePage = useCallback(() => {
+    const root = containerRef.current
+    if (!root) return
 
-    if (element) {
-      elements.set(pageIndex, element)
-      observerRef.current?.observe(element)
-    } else {
-      elements.delete(pageIndex)
+    const rootRect = root.getBoundingClientRect()
+    if (!rootRect.height) return
+
+    let chosen = null
+    // Falls back to whatever covers the most when nothing clears the floor — a page
+    // zoomed in far enough that only a band of it is visible still needs to be active.
+    let fallback = null
+    let fallbackCoverage = 0
+
+    for (const [index, element] of elementsRef.current) {
+      const rect = element.getBoundingClientRect()
+      const overlap =
+        Math.min(rect.bottom, rootRect.bottom) - Math.max(rect.top, rootRect.top)
+      if (overlap <= 0) continue
+
+      const coverage = overlap / rootRect.height
+      // Ties go to the later page here too, so the rule reads the same everywhere. The
+      // index comparison also makes this independent of Map iteration order, which
+      // follows registration and is not page order once virtualisation is remounting.
+      if (coverage > fallbackCoverage || (coverage === fallbackCoverage && index > fallback)) {
+        fallbackCoverage = coverage
+        fallback = index
+      }
+      // Later page wins, which is the whole point of the rule.
+      if (coverage >= ACTIVE_PAGE_MIN_COVERAGE && (chosen === null || index > chosen)) {
+        chosen = index
+      }
     }
-  }, [])
+
+    const next = chosen ?? fallback
+    if (next === null || next === activePageRef.current) return
+
+    activePageRef.current = next
+    setActivePageIndex(next)
+  }, [containerRef])
+
+  const registerPage = useCallback(
+    (pageIndex, element) => {
+      const elements = elementsRef.current
+      const previous = elements.get(pageIndex)
+      if (previous && observerRef.current) observerRef.current.unobserve(previous)
+
+      if (element) {
+        elements.set(pageIndex, element)
+        observerRef.current?.observe(element)
+      } else {
+        elements.delete(pageIndex)
+      }
+      // A page arriving or leaving changes the answer, and no scroll event follows.
+      measureActivePage()
+    },
+    [measureActivePage]
+  )
 
   useEffect(() => {
     const root = containerRef.current
@@ -58,33 +135,49 @@ export function usePageVisibility({ pageCount, container, containerRef }) {
         // Replace rather than mutate so React sees a change.
         setIntersecting(new Set(visible))
 
-        // The most-covered page wins. Comparing ratios rather than taking the first
-        // intersecting page keeps the indicator stable when two pages share the view.
-        let bestRatio = 0
-        let bestIndex = null
-        for (const entry of entries) {
-          if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio
-            bestIndex = Number.parseInt(entry.target.dataset.pageIndex, 10)
-          }
-        }
-        if (bestIndex !== null && !Number.isNaN(bestIndex)) {
-          activePageRef.current = bestIndex
-          setActivePageIndex(bestIndex)
-        }
+        /*
+         * The observer now drives virtualisation only. It also serves as a catch-all for
+         * the active page: it fires on layout changes that produce no scroll event —
+         * zooming, rotating a page, the container being resized.
+         */
+        measureActivePage()
       },
-      { root, threshold: [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1] }
+      // Only the boundary matters now that coverage is measured directly, so a single
+      // threshold is enough; the graded list existed to feed the ratio comparison.
+      { root, threshold: 0 }
     )
 
     observerRef.current = observer
     // Pages mounted before this effect ran still need observing.
     for (const element of elementsRef.current.values()) observer.observe(element)
 
+    /*
+     * Scroll is the real driver, and it is read straight from geometry rather than from
+     * observer thresholds — between two thresholds an observer reports stale numbers, and
+     * that staleness is what made the active page depend on how fast you scrolled.
+     *
+     * rAF-coalesced: a scroll fires far more often than a frame can paint, and each
+     * measurement reads layout.
+     */
+    let frame = 0
+    const onScroll = () => {
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        measureActivePage()
+      })
+    }
+
+    container.addEventListener('scroll', onScroll, { passive: true })
+    measureActivePage()
+
     return () => {
+      container.removeEventListener('scroll', onScroll)
+      if (frame) cancelAnimationFrame(frame)
       observer.disconnect()
       observerRef.current = null
     }
-  }, [container, containerRef, pageCount])
+  }, [container, containerRef, pageCount, measureActivePage])
 
   /**
    * The render window: everything on screen, plus a margin either side.

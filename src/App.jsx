@@ -133,30 +133,27 @@ export default function App() {
   const ready = status === 'ready'
 
   return (
-    <div className="w-screen h-screen overflow-auto bg-gray-100 flex flex-col relative">
-      {/*
-        A sticky navbar, which is what surfaced the stacking bug.
+    /*
+      A full-height column that does not scroll: header, viewer, footer.
 
-        Three things it needs, and only the third is the library's business:
-          - `sticky top-0` so it stays put while the page scrolls
-          - `bg-white`, or it is transparent and annotations show through it however the
-            layers are ordered
-          - `z-10`, because a positioned element with `z-index: auto` is painted in DOM
-            order — and the viewer comes after this, so it would win regardless. The
-            viewer now isolates its own layers, so this number is all it takes.
-      */}
-      <div className="sticky top-0 z-10 w-full border-b bg-white p-3">
-        <p className="text-black">Sticky Navbar</p>
-      </div>
+      This is the arrangement to copy. `overflow-hidden` on the page plus `flex-1 min-h-0`
+      on the viewer's box means the *viewer* scrolls its own document, and the page around
+      it stays put. `min-h-0` is the part that is easy to miss — without it a flex item
+      refuses to shrink below its content, so the column grows past the viewport and the
+      page scrolls after all.
 
-      {/*
-        Deliberately no fixed height on this wrapper, so the HOST PAGE scrolls rather than
-        the viewer — the arrangement that puts annotations up in the navbar's band in the
-        first place. Give it a height (`h-[80vh]`, say) and the viewer scrolls internally
-        instead, which is the better default; this stays as the harder case to get right.
-      */}
-      <div className="p-3">
-        <div className="flex-1 min-h-0">
+      Let the page scroll instead and everything still works, but the viewer's content
+      travels up behind anything pinned to the top of the window. That is the arrangement
+      that exposed the stacking bug; see "Putting your own UI over the viewer" in the
+      README if you need it.
+    */
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-gray-100">
+      <header className="flex-none border-b bg-white p-3">
+        <p className="text-black">Header</p>
+      </header>
+
+      <div className="min-h-0 flex-1 p-3">
+        <div className="h-full">
           <PDFViewer
             viewer={viewer}
             src="/signed-document.pdf"
@@ -210,7 +207,7 @@ export default function App() {
         Two submit rules with different requirements — the reason the flags are separate.
         Both live outside <PDFViewer>, and neither goes through a callback.
       */}
-      <div className="flex items-center gap-3 border-t bg-white p-3 text-sm">
+      <div className="flex flex-none flex-wrap items-center gap-3 border-t bg-white p-3 text-sm">
         <button
           type="button"
           disabled={!hasSpecimen}

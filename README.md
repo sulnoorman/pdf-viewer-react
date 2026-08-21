@@ -176,6 +176,14 @@ straight into typing, so "add text" and host actions that insert text are unaffe
 Objects can be dragged **across page boundaries**; they are reassigned to whichever page
 they end up over.
 
+**Which page a new object lands on.** Stamps, images and text boxes are placed on the
+*active* page — the one the page indicator shows, and the one `activePageIndex` reports.
+With two pages sharing the screen, the **later** one wins, so scrolling down to a page and
+stamping puts the stamp there rather than on the page above. A page has to cover at least a
+quarter of the viewport to count, so a sliver at the bottom edge does not take over.
+
+Use `viewer.goToPage(i)` to place somewhere else deliberately.
+
 **Keyboard**
 
 | Keys | Action |
