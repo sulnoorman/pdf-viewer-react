@@ -1,6 +1,6 @@
 {
   "name": "@armsolusi/pdf-viewer",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "A batteries-included React PDF viewer with built-in stamping and freehand annotation — pdf.js rendering and pdf-lib export in a single component.",
   "keywords": [
     "react",

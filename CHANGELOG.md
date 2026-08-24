@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.4
+
 ### Fixed
 
 - **An annotation could be dragged or resized off its page and left there.** Its stored
