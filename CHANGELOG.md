@@ -2,6 +2,109 @@
 
 ## Unreleased
 
+## 0.1.5
+
+### Added
+
+- **One viewer can now serve several documents, each with its own annotations.** Pass
+  `documentId` alongside `src` and the annotation store is emptied and re-seeded whenever it
+  changes. This is what a review workflow with a tab per attachment needs: without it,
+  swapping `src` alone left the previous document's annotations in place — same coordinates,
+  same page numbers, on a document they were never drawn on.
+
+  Your application holds the annotations, one entry per file: `config.initialAnnotations`
+  seeds a document and the new `config.onAnnotationsSnapshot` reports every annotation on
+  every change. That map is the whole draft, so persisting it is enough for a reviewer's
+  work to survive a reload — which is the reason the state lives in your app rather than
+  hidden inside the viewer.
+
+  `initialAnnotations` is read **only** when `documentId` changes, like `defaultValue` on an
+  input. It has to be: hosts store what the snapshot callback reports, so the prop changes on
+  every edit, and re-seeding from it would fight the user. `viewer.setAnnotations()` loads
+  annotations at any other moment.
+
+  `config.onAnnotationsChange` is untouched and still reports counts. Widening its payload
+  would have broken every host already using it, and the two answer different questions: one
+  gates a Submit button, the other saves work — a stamp being moved changes nothing to count
+  and everything to store.
+
+  Undo history is per document, so Ctrl+Z after opening an attachment cannot undo the
+  restoring of its draft.
+
+- **`flattenPdf()`** — the export pipeline without a mounted viewer, so a Submit button can
+  produce *every* attachment with its own annotations. `getFlattenedPDF()` can only ever
+  export the document on screen, and driving one viewer around the rest to collect the output
+  would mean loading and rendering each in turn for nothing.
+
+  ```js
+  import { flattenPdf } from '@armsolusi/pdf-viewer'
+  const blob = await flattenPdf({ src: file.url, annotations, stampAssets })
+  ```
+
+- **`viewer.setAnnotations()`** — replace every annotation, for restoring a draft that
+  arrives after the viewer has mounted. Clears undo history, so one Ctrl+Z cannot discard
+  what was just loaded.
+
+- **Returning to a document already visited is now instant**, which is what makes tabs
+  usable at all. Switching used to repeat the entire load — re-fetch the whole file,
+  re-parse it in a fresh worker, and re-measure every page one at a time — so a large
+  attachment made the reviewer wait on every switch even though nothing had changed.
+
+  The last **3** documents now stay parsed, least-recently-used, and the scroll position
+  comes back with them. `config.documentCacheSize` changes that number and `0` switches it
+  off; nothing is prefetched, so only documents actually opened are kept. The memory cost is
+  `documentCacheSize × file size` for the pristine bytes, plus pdf.js's own structures on
+  top — which depend on what is in the document rather than its size, so lower the number if
+  your attachments are large.
+
+  Two other costs went with it, and both make the **first** load faster too: every document
+  shares one pdf.js worker instead of starting and tearing one down per document, and page
+  geometry is measured in batches rather than one sequential worker round trip per page —
+  116 of them, for a 116-page file, before anything could be drawn.
+
+  The page list is keyed by document as well as page index, which matters more than it
+  sounds: a document arriving from the cache no longer passes through a loading state, so
+  nothing unmounts the page components — and reusing them left the previous document's
+  canvas, text layer and annotation layer on screen until the new raster landed. On a large
+  document that is long enough to read, so it looked as though the wrong attachment had been
+  opened. The scroller itself is still reused, which is what preserves the scroll position.
+
+  Keeping a document also means being careful about what tears it down. `loadingTask.destroy()`
+  is documented by pdf.js as "abort all network requests and destroy the worker" — the same
+  teardown as `PDFDocumentProxy.destroy()`, not merely cancelling a fetch — so it is now
+  called only for a load that never reached the cache. A cached document is released when its
+  entry is evicted or the viewer unmounts, and not before.
+
+  Both of those return promises that reject when the thing they are tearing down has already
+  gone, which happens routinely — effect cleanups run in declaration order, so the shared
+  worker goes before the documents using it, and React's StrictMode runs every cleanup once
+  on mount. So does a worker's own readiness promise, which pdf.js rejects when the worker is
+  disposed of before it finished starting; nothing awaits that one, and `PDFWorker.destroy()`
+  returns void, so it needed a handler of its own.
+
+  Left unattended these surfaced as `Uncaught (in promise) Error: Worker was destroyed` as
+  soon as the viewer mounted in development — a library error in the console, about nothing:
+  the worker that rejects is one that was never used. All three are handled now.
+
+### Fixed
+
+- **A destroyed document was rendered while the next one loaded.** Changing `src` destroyed
+  the outgoing pdf.js document but the hook still reported it as ready, so every `getPage()`
+  threw and was swallowed into the console. Staleness was decided by testing `pdfDoc` for
+  null, which could not see a swap at all — the previous document was still there, so it
+  looked fine. Results now carry the `src` they were loaded for. Unnoticeable for as long as
+  `src` never changed after mount; on every tab switch, not.
+
+  Moving away from a document that failed to load also used to show the old error under the
+  new document; it now reports loading, as it should.
+
+- **A PNG was embedded as a JPEG when its format could not be guessed from a name.** The
+  format was taken from `mimeType` or a path ending in `.png`, and a `data:` URL has neither
+  — pdf-lib then failed with "SOI not found in JPEG", naming neither the asset nor the real
+  cause. The image bytes are inspected first now, which is the only signal always available;
+  the old hints remain as a fallback. This matters more than it used to, because a data URL
+  is how a host keeps an uploaded signature in a saved draft.
+
 ## 0.1.4
 
 ### Fixed

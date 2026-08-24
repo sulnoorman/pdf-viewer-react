@@ -63,12 +63,21 @@ function warnAssetFailed(assetId, src) {
  * Split out from index.jsx because these hooks consume the very contexts index.jsx
  * mounts, and a component cannot read a provider it renders itself.
  */
-export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
+export function PDFViewerInner({ src, documentId, config = {}, viewerRef, viewer }) {
   const {
     specimenAsset,
     stampAssets: stampAssetsProp,
     onSpecimenChange,
     onAnnotationsChange,
+    /**
+     * Every annotation, whenever any of them changes — the door for saving a draft.
+     *
+     * Separate from `onAnnotationsChange`, which reports `counts` and is edge-triggered on
+     * those counts. Widening that one's payload would have broken every host already using
+     * it, and the two answer different questions: one gates a Submit button, this one
+     * persists work.
+     */
+    onAnnotationsSnapshot,
     onDownload,
     onLoadError,
     canDownload = true,
@@ -91,6 +100,12 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
     renderToolbar,
     workerSrc,
     workerPort,
+    /**
+     * How many documents to keep parsed in memory, so returning to one a host has already
+     * shown is instant rather than a fresh load. Only matters when one viewer cycles
+     * through several documents; `0` switches it off.
+     */
+    documentCacheSize,
   } = config
 
   /*
@@ -117,15 +132,53 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
    */
   const [pageRotations, setPageRotations] = useState({})
 
-  const { pdfDoc, pageSizes, sourceBytes, status, error, reload } = usePdfDocument(src, {
+  const {
+    pdfDoc,
+    pageSizes,
+    sourceBytes,
+    status,
+    error,
+    reload,
+    documentKey,
+    rememberScroll,
+    getRememberedScroll,
+  } = usePdfDocument(src, {
     workerSrc,
     workerPort,
+    cacheSize: documentCacheSize,
     onLoadError,
   })
 
   const pageCount = pdfDoc?.numPages ?? 0
   const { activePageIndex, activePageRef, renderWindow, registerPage, scrollToPage } =
     usePageVisibility({ pageCount, container: scrollContainer, containerRef: scrollContainerRef })
+
+  /*
+   * Where the reader was in each document, so returning to one lands there.
+   *
+   * This only became necessary because switching documents stopped unmounting the scroller:
+   * with it now surviving, arriving at another document inherits the previous one's scroll
+   * offset — worse than arriving at the top, and a consequence of the improvement rather
+   * than an accident.
+   */
+  useEffect(() => {
+    if (!scrollContainer) return undefined
+    const onScroll = () => rememberScroll(scrollContainer.scrollTop)
+    scrollContainer.addEventListener('scroll', onScroll, { passive: true })
+    return () => scrollContainer.removeEventListener('scroll', onScroll)
+  }, [scrollContainer, rememberScroll])
+
+  useEffect(() => {
+    // Keyed on the document, so it restores on arrival and never fights live scrolling.
+    // Page sizes are known before anything is rasterised, so the scroller already has its
+    // full height and the offset is reachable straight away.
+    //
+    // Written through the ref rather than the state value: the scroll position is not
+    // something the render reads, and mutating state is rightly refused by lint.
+    const root = scrollContainerRef.current
+    if (!root || !pdfDoc) return
+    root.scrollTop = getRememberedScroll()
+  }, [pdfDoc, scrollContainer, getRememberedScroll])
 
   // Fit modes must measure the page as displayed, not as stored, or rotating a
   // landscape page to portrait would leave it overflowing.
@@ -185,6 +238,18 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
   const viewerValue = useMemo(
     () => ({
       pdfDoc,
+      /**
+       * Identifies the loaded document, so the page list can be keyed by it.
+       *
+       * A page bound to one document is not the same thing as a page bound to another, and
+       * keying says so. Without it the page components survive a switch and keep the
+       * previous document's canvas, text layer and annotation layer on screen until the new
+       * raster lands — which for a large document is long enough to read.
+       *
+       * That could not happen before documents were cached, because a switch passed through
+       * a loading state that unmounted the whole view.
+       */
+      documentKey,
       pageSizes,
       pageRotations,
       status,
@@ -193,7 +258,17 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
       setScrollContainer,
       stampAssets,
     }),
-    [pdfDoc, pageSizes, pageRotations, status, error, zoom.scale, stampAssets, setScrollContainer]
+    [
+      pdfDoc,
+      documentKey,
+      pageSizes,
+      pageRotations,
+      status,
+      error,
+      zoom.scale,
+      stampAssets,
+      setScrollContainer,
+    ]
   )
 
   /** Turn one page, or every page, by a quarter turn. */
@@ -216,6 +291,7 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
 
   const onSpecimenChangeRef = useLatestRef(onSpecimenChange)
   const onAnnotationsChangeRef = useLatestRef(onAnnotationsChange)
+  const onAnnotationsSnapshotRef = useLatestRef(onAnnotationsSnapshot)
 
   /*
    * Both callbacks are edge-triggered.
@@ -240,6 +316,25 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
       onAnnotationsChangeRef.current?.(counts)
     }
   }, [hasSpecimen, counts, onSpecimenChangeRef, onAnnotationsChangeRef])
+
+  /*
+   * The draft-saving callback, and the one place that is NOT edge-triggered on counts.
+   *
+   * Moving a stamp changes no count but changes what has to be saved, so this fires on any
+   * change to the annotation data — that is the whole point of it existing separately.
+   * `annotations` is the store object, replaced only when something actually changed, so
+   * this costs one call per edit and none per render.
+   *
+   * `documentId` travels with the payload because the host keys its draft map by it, and by
+   * the time a switch settles the active document has already moved on.
+   */
+  useEffect(() => {
+    const report = onAnnotationsSnapshotRef.current
+    // Guarded before `selectAll` runs, not after: flattening the store allocates an array
+    // the size of the document's annotation count, and most hosts never ask for this.
+    if (!report) return
+    report(selectAll(annotations), { documentId })
+  }, [annotations, documentId, onAnnotationsSnapshotRef])
 
   /* -------------------------------- actions -------------------------------- */
 
@@ -434,6 +529,15 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
       reload,
 
       getAnnotations: () => selectAll(actions.getSnapshot()),
+      /**
+       * Load a set of annotations over whatever is there — restoring a draft that arrived
+       * from a server after the viewer had already mounted, which `config.initialAnnotations`
+       * cannot do because it is only read when the document changes.
+       *
+       * Clears undo history: there is nothing sensible to undo past a wholesale replacement,
+       * and leaving it would let one Ctrl+Z discard the draft that was just loaded.
+       */
+      setAnnotations: (annotationList) => actions.replaceAll(annotationList),
       getFlattenedPDF: async () => {
         if (!sourceBytes) throw new Error('No document loaded')
         // Reuses the bytes fetched at load time, so export works for a File or an
@@ -497,6 +601,7 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
       undo: api.undo,
       redo: api.redo,
       getAnnotations: api.getAnnotations,
+      setAnnotations: api.setAnnotations,
       getFlattenedPDF: api.getFlattenedPDF,
     }),
     [api]

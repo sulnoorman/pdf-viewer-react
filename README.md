@@ -250,6 +250,7 @@ depend on a URL still being reachable.
 | Prop | Type | Notes |
 | --- | --- | --- |
 | `src` | `string \| File \| Blob \| ArrayBuffer \| Uint8Array` | The document |
+| `documentId` | `string \| number` | Which document the annotations belong to. Only needed when one viewer shows several in turn — see [Several documents through one viewer](#several-documents-through-one-viewer) |
 | `config` | `PDFViewerConfig` | See below |
 | `viewer` | `PdfViewerHandle` | From `usePdfViewer()`. How to read state and drive it |
 | `ref` | `Ref<PDFViewerHandle>` | The older, smaller door onto the same API |
@@ -260,6 +261,7 @@ depend on a URL still being reachable.
 | --- | --- | --- | --- |
 | `workerSrc` | `string` | bundled | Override the worker URL; the package ships one |
 | `workerPort` | `Worker` | — | A Worker you built yourself; wins over `workerSrc` |
+| `documentCacheSize` | `number` | `3` | How many documents stay parsed in memory, so returning to one is instant. `0` switches it off |
 | `specimenAsset` | `string` | — | The signature image; the only thing `hasSpecimen` counts |
 | `stampAssets` | `Record<string, string \| StampAsset> \| StampAsset[]` | — | Several stamp images |
 | `allowMultipleStamps` | `boolean` | `true` | `false` allows exactly one image stamp |
@@ -269,6 +271,8 @@ depend on a URL still being reachable.
 | `onDownload` | `() => void` | — | Renders the Download button when provided |
 | `canDownload` | `boolean` | `true` | Disables the Download button |
 | `onAnnotationsChange` | `(counts) => void` | — | `{ specimen, stamp, image, text, ink, total }`. Fires only when a number changes |
+| `onAnnotationsSnapshot` | `(annotations, { documentId }) => void` | — | Every annotation, on every change. The door for saving a draft |
+| `initialAnnotations` | `Annotation[]` | — | Annotations to start this document with. Read only when `documentId` changes |
 | `onSpecimenChange` | `(hasSpecimen: boolean) => void` | — | Fires when `hasSpecimen` changes |
 | `onLoadError` | `(error) => void` | — | Document failed to load |
 | `toolbar` | `ToolbarConfig \| false` | — | Which actions appear; `false` hides the bar |
@@ -286,6 +290,7 @@ controller handle below, which is what new code should use.
 | --- | --- | --- |
 | `getFlattenedPDF()` | `Promise<Blob>` | The signed document |
 | `getAnnotations()` | `Annotation[]` | Current annotations, in paint order |
+| `setAnnotations(list)` | `void` | Replaces them all. Clears undo history |
 | `addTextStamp(options?)` | `string` | Adds a text box, returns its id |
 | `addImageStamp(assetId?)` | `Promise<string \| null>` | Places a stamp image |
 | `undo()` / `redo()` | `void` | Same stack as the toolbar buttons |
@@ -491,15 +496,115 @@ const submitRevision = async () => {
 ### Store annotations instead of flattening them
 
 `getAnnotations()` returns plain objects in view space (PDF points, top-left origin), so
-they survive a round trip through JSON and your database. There is no import API yet —
-see Known limitations.
+they survive a round trip through JSON and your database, and go back in through
+`config.initialAnnotations` or `viewer.setAnnotations()`.
 
 ```jsx
 await fetch('/api/annotations', {
   method: 'POST',
   body: JSON.stringify(viewer.getAnnotations()),
 })
+
+// later, once the saved list has been fetched
+viewer.setAnnotations(saved)
 ```
+
+One thing to know before saving: an image annotation records only its `assetId`, not the
+image. It renders again if that asset is in `config.stampAssets` (or is `specimenAsset`)
+next time, so keep those ids stable. An image the **user uploaded** into the viewer lives
+only in that viewer's memory, so a saved annotation pointing at one comes back with nothing
+to draw. To keep those, store the image yourself — upload it and register the URL, or hold
+it as a data URL under a stable id.
+
+## Several documents through one viewer
+
+A review workflow often has several attachments, shown as tabs, each annotated separately.
+One mounted `<PDFViewer>` can serve all of them: pass `documentId` alongside `src`, and the
+annotation store is emptied and re-seeded whenever it changes.
+
+**Without `documentId` the annotations do not belong to anything**, so swapping `src` alone
+leaves the previous document's annotations in place — at the same coordinates, on the same
+page numbers, in a document they were never drawn on.
+
+Your app holds the annotations, one entry per file:
+
+```jsx
+const [byFile, setByFile] = useState({})
+const active = attachments[tab]
+
+<PDFViewer
+  documentId={active.id}
+  src={active.url}
+  config={{
+    initialAnnotations: byFile[active.id],
+    onAnnotationsSnapshot: (annotations, { documentId }) =>
+      setByFile((all) => ({ ...all, [documentId]: annotations })),
+    stampAssets,
+  }}
+/>
+```
+
+That map is the whole draft. Persist it whenever you like — to your API, or to
+`localStorage` — and a reviewer's work survives a reload.
+
+Three details worth knowing:
+
+**`initialAnnotations` is read only when `documentId` changes**, like `defaultValue` on an
+input. It has to be: your app stores what `onAnnotationsSnapshot` reports, so the prop
+changes on every edit, and re-seeding from it would fight the user. Use
+`viewer.setAnnotations()` to load annotations at any other moment.
+
+**`onAnnotationsSnapshot` is not `onAnnotationsChange`.** The older callback reports counts
+and stays silent when a stamp merely moves — right for gating a Submit button, useless for
+saving, because a move changes nothing to count and everything to store. Both still work,
+independently.
+
+**Undo history is per document.** Opening an attachment starts a fresh stack, so Ctrl+Z
+cannot reach back and undo the restoring of a draft.
+
+### Returning to a document is instant
+
+The last **3** documents stay parsed in memory, so going back to one already visited costs
+nothing: no re-fetch, no re-parse, no loading state, and the scroll position comes back with
+it. Without this, every tab switch reloaded the file from scratch — for a large document
+that is a wait the reviewer feels each time.
+
+`config.documentCacheSize` changes how many are kept, and `0` switches it off. Lower it if
+your attachments are large: each cached document holds the file's pristine bytes —
+`documentCacheSize × file size`, which you can work out — plus pdf.js's own structures,
+which depend on what is *in* the document rather than how big it is. A scanned document full
+of large images costs far more than a text one of the same size, so measure with real files
+rather than trusting a formula.
+
+Nothing is prefetched. Only documents actually opened are kept.
+
+Keep `documentId` stable for as long as a document is open. Going from `undefined` to an id
+is read as "the id is now known" and keeps whatever has been drawn, so
+`documentId={file?.id}` is safe while the metadata is still loading.
+
+### Exporting every file, not just the one on screen
+
+`getFlattenedPDF()` can only export the document in the viewer. For a Submit button that
+has to produce all of them, `flattenPdf` is the same export pipeline with the component
+left out:
+
+```js
+import { flattenPdf } from '@armsolusi/pdf-viewer'
+
+const files = await Promise.all(
+  attachments.map(async (file) => ({
+    id: file.id,
+    blob: await flattenPdf({
+      src: file.url,
+      annotations: byFile[file.id] ?? [],
+      stampAssets,
+    }),
+  }))
+)
+```
+
+Attachments the reviewer never opened come through too, with no annotations. `src` takes
+the same shapes the `src` prop takes, and `stampAssets` the same shape as in `config`.
 
 ## Localisation
 
@@ -577,8 +682,10 @@ to matter.
   again in a PDF reader. Round-trippable PDF annotation objects are not supported yet.
 - Only the 14 standard PDF fonts. Custom font embedding is not supported.
 - Links and form fields in the source document are rendered but inert.
-- No persistence: annotations live in memory and are lost on reload. Read them with
-  `getAnnotations()` if you need to store them.
+- The library stores nothing itself: annotations live in memory for as long as the viewer is
+  mounted. Saving them is yours to do — `onAnnotationsSnapshot` out, `initialAnnotations` or
+  `setAnnotations()` back in. Images the user uploaded are the one thing that does not
+  survive the round trip; see "Store annotations instead of flattening them".
 - Resize handles operate on the unrotated bounding box, so resizing a rotated object
   feels slightly off-axis.
 

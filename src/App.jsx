@@ -5,6 +5,7 @@ import {
   PDFViewer,
   usePdfViewer,
   useViewerState,
+  flattenPdf,
   DEFAULT_TOOLBAR_ACTIONS,
 } from './index.js'
 
@@ -80,6 +81,20 @@ const LABELS = {
  */
 const SPECIMEN = `${import.meta.env.BASE_URL}Tandatangan.png`
 
+/**
+ * Several documents behind one viewer, as tabs.
+ *
+ * This is the shape a review workflow has: a request carries a few attachments and the
+ * reviewer marks up each one. The important part is that each carries an `id` — passed as
+ * `documentId`, it is what keeps one attachment's annotations out of the others. Without
+ * it, swapping `src` alone leaves the previous document's annotations in place, at the same
+ * coordinates, on a document they were never drawn on.
+ */
+const ATTACHMENTS = [
+  { id: 'lampiran-1', label: 'Lampiran 1', url: '/signed-document.pdf' },
+  { id: 'lampiran-2', label: 'Lampiran 2', url: '/sample.pdf' },
+]
+
 export default function App() {
   /*
    * The controller pair, rather than a ref plus an onChange callback.
@@ -94,6 +109,19 @@ export default function App() {
   const viewer = usePdfViewer()
   const { hasSpecimen, hasAnnotation, counts, status } = useViewerState(viewer)
   const [message, setMessage] = useState(null)
+
+  /*
+   * The annotations for every attachment, held here rather than inside the viewer.
+   *
+   * This map IS the draft. Persist it — to an API, to localStorage — and a reviewer's work
+   * survives a reload; that is the whole reason the library does not keep it for you.
+   *
+   * The viewer only ever holds the active document's annotations: `initialAnnotations` seeds
+   * it when `documentId` changes, and `onAnnotationsSnapshot` reports back on every edit.
+   */
+  const [activeId, setActiveId] = useState(ATTACHMENTS[0].id)
+  const [byFile, setByFile] = useState({})
+  const active = ATTACHMENTS.find((file) => file.id === activeId) ?? ATTACHMENTS[0]
 
   /**
    * The library never saves the file. `getFlattenedPDF()` hands back a Blob and what
@@ -120,6 +148,33 @@ export default function App() {
       setMessage(`Gagal: ${error.message}`)
     }
   }, [viewer])
+
+  /**
+   * Submit: every attachment with its own annotations, including ones never opened.
+   *
+   * `getFlattenedPDF()` could only give us the document on screen. `flattenPdf` is the same
+   * export pipeline without the component, so this is an ordinary loop rather than a tour of
+   * the tabs — nothing is loaded or rendered to produce it.
+   */
+  const handleSubmitAll = useCallback(async () => {
+    try {
+      setMessage('Menyiapkan semua lampiran…')
+      const files = await Promise.all(
+        ATTACHMENTS.map(async (file) => {
+          const blob = await flattenPdf({
+            src: file.url,
+            annotations: byFile[file.id] ?? [],
+            specimenAsset: SPECIMEN,
+            stampAssets: [{ id: 'seal', label: 'Cap perusahaan', src: SPECIMEN }],
+          })
+          return `${file.label} ${(blob.size / 1024).toFixed(0)} kB`
+        })
+      )
+      setMessage(files.join(' · '))
+    } catch (error) {
+      setMessage(`Gagal: ${error.message}`)
+    }
+  }, [byFile])
 
   /** A host action on the toolbar. Anything on the handle is available to it. */
   const addDocumentNumber = useCallback(() => {
@@ -149,16 +204,57 @@ export default function App() {
     */
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-gray-100">
       <header className="flex-none border-b bg-white p-3">
-        <p className="text-black">Header</p>
+        <p className="mb-2 text-black">Dokumen Perlu Ditinjau</p>
+
+        {/*
+          Switching tabs changes `documentId` and `src` together. Annotations on the
+          attachment being left are not lost — they are in `byFile`, and come back through
+          `initialAnnotations` when the reviewer returns to it.
+        */}
+        <div className="flex gap-2">
+          {ATTACHMENTS.map((file) => {
+            const marks = byFile[file.id]?.length ?? 0
+            return (
+              <button
+                key={file.id}
+                type="button"
+                onClick={() => setActiveId(file.id)}
+                className={`rounded-full px-3 py-1 text-sm ${
+                  file.id === active.id ? 'bg-red-50 text-red-700' : 'text-gray-500'
+                }`}
+              >
+                {file.label}
+                {marks > 0 && <span className="ml-1 text-xs opacity-70">({marks})</span>}
+              </button>
+            )
+          })}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 p-3">
         <div className="h-full">
           <PDFViewer
             viewer={viewer}
-            src="/signed-document.pdf"
+            src={active.url}
+            /*
+              What separates one attachment's annotations from another's. Leave it out and
+              the store belongs to nothing, so swapping `src` carries the marks across.
+            */
+            documentId={active.id}
             config={{
+              // documentCacheSize:0
               labels: LABELS,
+
+              /*
+                Seed in, snapshot out — the pair that lets the host own the draft.
+
+                `initialAnnotations` is read only when `documentId` changes, like
+                `defaultValue` on an input. It has to be: the snapshot below changes this
+                prop on every edit, and re-seeding from it would fight the user.
+              */
+              initialAnnotations: byFile[active.id],
+              onAnnotationsSnapshot: (annotations, { documentId }) =>
+                setByFile((all) => ({ ...all, [documentId]: annotations })),
 
               /* The signature. Only stamps placed from this satisfy `hasSpecimen`. */
               specimenAsset: SPECIMEN,
@@ -226,7 +322,22 @@ export default function App() {
           Kirim — wajib catatan {hasAnnotation ? '✓' : '✗'}
         </button>
 
+        <button
+          type="button"
+          onClick={handleSubmitAll}
+          className="rounded border px-3 py-1.5"
+        >
+          Kirim semua lampiran
+        </button>
+
         <code className="text-xs text-gray-600">{JSON.stringify(counts)}</code>
+        {/*
+          Proof the separation holds: the count beside each tab, from the host's own map
+          rather than from the viewer.
+        */}
+        <code className="text-xs text-gray-600">
+          {ATTACHMENTS.map((f) => `${f.label}: ${byFile[f.id]?.length ?? 0}`).join(' · ')}
+        </code>
         {message && <span className="text-gray-700">{message}</span>}
       </div>
     </div>

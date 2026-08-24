@@ -14,18 +14,31 @@ import { PDFViewerInner } from './PDFViewerInner.jsx'
  *
  * @param {object} props
  * @param {string} props.src URL of the PDF to display
+ * @param {string|number} [props.documentId] which document the annotations belong to. Pass
+ *   it when one mounted viewer shows several documents in turn — tabs of attachments, say —
+ *   and the annotations must not follow the user from one to the next. Changing it empties
+ *   the store and re-seeds it from `config.initialAnnotations`. Left out, nothing changes.
  * @param {object} [props.config] see the README
  * @param {object} [props.viewer] handle from `usePdfViewer()`; the recommended way to
  *   read state and drive the viewer, because it also works from outside this subtree
  * @param {React.Ref} ref the older, smaller door onto the same API: addTextStamp /
  *   addImageStamp / undo / redo / getAnnotations / getFlattenedPDF
  */
-export const PDFViewer = forwardRef(function PDFViewer({ src, config, viewer }, ref) {
+export const PDFViewer = forwardRef(function PDFViewer({ src, documentId, config, viewer }, ref) {
   return (
     <LabelProvider labels={config?.labels}>
-      <AnnotationProvider>
+      <AnnotationProvider
+        documentId={documentId}
+        initialAnnotations={config?.initialAnnotations}
+      >
         <ToolProvider>
-          <PDFViewerInner src={src} config={config ?? {}} viewerRef={ref} viewer={viewer} />
+          <PDFViewerInner
+            src={src}
+            documentId={documentId}
+            config={config ?? {}}
+            viewerRef={ref}
+            viewer={viewer}
+          />
         </ToolProvider>
       </AnnotationProvider>
     </LabelProvider>

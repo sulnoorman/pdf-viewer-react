@@ -14,6 +14,7 @@ export const VIEWER_METHODS = Object.freeze([
   // Export
   'getFlattenedPDF',
   'getAnnotations',
+  'setAnnotations',
   // Annotations
   'addTextStamp',
   'addImageStamp',

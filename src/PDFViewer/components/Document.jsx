@@ -13,7 +13,7 @@ import styles from './Document.module.css'
  * few-hundred-page document unusable.
  */
 export function Document({ registerPage, renderWindow }) {
-  const { pdfDoc, setScrollContainer } = useViewer()
+  const { pdfDoc, documentKey, setScrollContainer } = useViewer()
   const { setActiveId } = useTools()
 
   return (
@@ -28,10 +28,21 @@ export function Document({ registerPage, renderWindow }) {
         if (e.target === e.currentTarget) setActiveId(null)
       }}
     >
+      {/*
+        Keyed by the document as well as the page index.
+
+        A page holding one document's canvas, text layer and annotation layer is not the
+        same component as a page holding another's, and the key says so: switching document
+        builds fresh ones rather than reusing them. Keyed by index alone, the old canvas
+        stayed on screen — still showing the other document — until the new raster landed,
+        which on a large document is long enough to read.
+
+        The scroller itself stays mounted either way, so the scroll position survives.
+      */}
       {pdfDoc &&
         Array.from({ length: pdfDoc.numPages }, (_, i) => (
           <MemoPage
-            key={i}
+            key={`${documentKey}:${i}`}
             pageNumber={i + 1}
             registerPage={registerPage}
             shouldRender={renderWindow.has(i)}

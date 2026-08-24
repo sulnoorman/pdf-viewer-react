@@ -12,6 +12,8 @@ import {
   createTextAnnotation,
   createInkAnnotation,
   selectAll,
+  annotationsToState,
+  replaceAllAnnotations,
   selectByPage,
   selectCounts,
 } from './annotationReducer.js'
@@ -309,5 +311,84 @@ describe('selectors', () => {
 describe('unknown actions', () => {
   it('leave state untouched by reference', () => {
     expect(annotationReducer(initialAnnotationState, { type: 'nope' })).toBe(initialAnnotationState)
+  })
+})
+
+describe('annotationsToState', () => {
+  it('round-trips with selectAll, preserving paint order', () => {
+    // The contract that makes drafts work: what getAnnotations() hands out has to be
+    // acceptable straight back, order intact, because order is the z-order.
+    const list = [
+      createImageAnnotation({ id: 'a', pageIndex: 0 }),
+      createTextAnnotation({ id: 'b', pageIndex: 3, text: 'hi' }),
+      createImageAnnotation({ id: 'c', pageIndex: 1 }),
+    ]
+    const state = annotationsToState(list)
+
+    expect(state.order).toEqual(['a', 'b', 'c'])
+    expect(selectAll(state)).toEqual(list)
+  })
+
+  it('empties the store for anything that is not an array', () => {
+    for (const input of [undefined, null, 'nope', 42, {}]) {
+      expect(annotationsToState(input)).toBe(initialAnnotationState)
+    }
+  })
+
+  it('drops malformed entries instead of throwing', () => {
+    /*
+     * The list arrives from a host — localStorage, an API, a serialisation round trip. One
+     * bad row must cost that annotation, not the whole viewer.
+     *
+     * `pageIndex` is the field worth being strict about: a missing or non-integer one would
+     * otherwise put the annotation on page 1 of a document it does not belong to.
+     */
+    const state = annotationsToState([
+      null,
+      'not an object',
+      { id: 'no-page' },
+      { id: 'bad-page', pageIndex: 'first' },
+      { id: 'fractional', pageIndex: 1.5 },
+      { id: 'negative', pageIndex: -1 },
+      { pageIndex: 0 }, // no id
+      { id: '', pageIndex: 0 }, // empty id
+      createImageAnnotation({ id: 'good', pageIndex: 2 }),
+    ])
+
+    expect(state.order).toEqual(['good'])
+  })
+
+  it('keeps the first of two entries sharing an id', () => {
+    // A duplicate would make `order` and `byId` disagree about how many there are, and the
+    // second copy would be unreachable but still counted.
+    const state = annotationsToState([
+      createImageAnnotation({ id: 'dup', pageIndex: 0, width: 10 }),
+      createImageAnnotation({ id: 'dup', pageIndex: 1, width: 99 }),
+    ])
+
+    expect(state.order).toEqual(['dup'])
+    expect(state.byId.dup.width).toBe(10)
+  })
+})
+
+describe('REPLACE_ALL', () => {
+  it('swaps the whole store', () => {
+    const seeded = annotationReducer(
+      initialAnnotationState,
+      addAnnotation(createTextAnnotation({ id: 'old', text: 'gone' }))
+    )
+    const next = annotationsToState([createImageAnnotation({ id: 'new', pageIndex: 0 })])
+
+    const state = annotationReducer(seeded, replaceAllAnnotations(next))
+    expect(state.order).toEqual(['new'])
+    expect(state.byId.old).toBeUndefined()
+  })
+
+  it('empties the store when given nothing', () => {
+    const seeded = annotationReducer(
+      initialAnnotationState,
+      addAnnotation(createTextAnnotation({ id: 'old' }))
+    )
+    expect(annotationReducer(seeded, replaceAllAnnotations())).toBe(initialAnnotationState)
   })
 })

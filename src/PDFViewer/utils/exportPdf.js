@@ -72,14 +72,41 @@ async function embedAssets(pdfDoc, annotations, assets) {
     const bytes = asset?.bytes ?? (source ? await fetchAssetBytes(assetId, source) : null)
     if (!bytes) continue
 
-    const isPng =
-      asset?.mimeType === 'image/png' ||
-      (typeof source === 'string' && source.split('?')[0].toLowerCase().endsWith('.png'))
-
-    embedded.set(assetId, isPng ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes))
+    embedded.set(
+      assetId,
+      isPng(bytes, asset, source) ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes)
+    )
   }
 
   return embedded
+}
+
+/** The first eight bytes of every PNG file, by specification. */
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+/**
+ * PNG or JPEG? pdf-lib needs to be told, and getting it wrong throws.
+ *
+ * **The bytes are asked first**, because they are the only source that is always right. The
+ * hints below can all be absent from a perfectly ordinary asset:
+ *
+ * - a `data:` URL ends in base64, not `.png`
+ * - a `blob:` URL has no extension at all
+ * - a URL can serve a PNG from a path ending in anything, or nothing
+ * - `bytes` supplied directly may arrive with no `mimeType`
+ *
+ * Before this, any of those fell through to `embedJpg` and failed with pdf-lib's
+ * "SOI not found in JPEG" — a message that names neither the asset nor the real problem.
+ * The hints are kept as a fallback for the one case sniffing cannot serve: bytes too short
+ * to carry a signature, where the old guess is still better than nothing.
+ */
+function isPng(bytes, asset, source) {
+  const head = new Uint8Array(bytes instanceof ArrayBuffer ? bytes : bytes.buffer ?? bytes, 0, 8)
+  if (head.length >= 8) return PNG_SIGNATURE.every((byte, i) => head[i] === byte)
+
+  if (asset?.mimeType) return asset.mimeType === 'image/png'
+  if (typeof source !== 'string') return false
+  return source.startsWith('data:image/png') || source.split('?')[0].toLowerCase().endsWith('.png')
 }
 
 /**

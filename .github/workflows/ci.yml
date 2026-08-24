@@ -30,7 +30,13 @@ jobs:
       - name: Typecheck the declarations
         run: |
           cat > /tmp/consumer.tsx <<'EOF'
-          import { PDFViewer, usePdfViewer, useViewerState, DEFAULT_TOOLBAR_ACTIONS } from './dist/index'
+          import {
+            PDFViewer,
+            usePdfViewer,
+            useViewerState,
+            flattenPdf,
+            DEFAULT_TOOLBAR_ACTIONS,
+          } from './dist/index'
           import type { Annotation, PdfViewerHandle } from './dist/index'
 
           const viewer: PdfViewerHandle = usePdfViewer()
@@ -49,6 +55,34 @@ jobs:
               }}
             />
           )
+
+          // Several documents through one viewer, with the host holding a draft per file.
+          const drafts: Record<string, Annotation[]> = {}
+
+          export const tabbed = (
+            <PDFViewer
+              viewer={viewer}
+              src="/lampiran-1.pdf"
+              documentId="lampiran-1"
+              config={{
+                initialAnnotations: drafts['lampiran-1'],
+                onAnnotationsSnapshot: (annotations, { documentId }) => {
+                  if (documentId !== undefined) drafts[String(documentId)] = annotations
+                },
+              }}
+            />
+          )
+
+          export const restore = (saved: Annotation[]): void => viewer.setAnnotations(saved)
+
+          // Submit: every attachment with its own annotations, no viewer involved.
+          export const submit = (ids: string[]): Promise<Blob[]> =>
+            Promise.all(
+              ids.map((id) =>
+                flattenPdf({ src: `/${id}.pdf`, annotations: drafts[id] ?? [], stampAssets: {} })
+              )
+            )
+
           export { signed, describe }
           EOF
           cp /tmp/consumer.tsx ./consumer-typecheck.tsx

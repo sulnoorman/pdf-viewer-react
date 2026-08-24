@@ -159,6 +159,50 @@ export const duplicateAnnotation = (id, offset, bounds) => ({
   bounds,
 })
 
+/**
+ * Swap the whole store — used when the viewer moves to a different document, and by
+ * `viewer.setAnnotations()` to restore a saved draft.
+ *
+ * @param {{byId: object, order: string[]}} [state] omitted or nullish empties the store
+ */
+export const replaceAllAnnotations = (state) => ({
+  type: ANNOTATION_ACTIONS.REPLACE_ALL,
+  state,
+})
+
+/**
+ * Rebuild the store from a flat list — the inverse of `selectAll`, so what
+ * `getAnnotations()` hands out can be handed straight back.
+ *
+ * **Malformed entries are dropped rather than thrown on.** The list arrives from a host:
+ * out of `localStorage`, off an API, through a serialisation round trip. One bad row in a
+ * saved draft must cost that annotation, not the whole viewer — and `pageIndex` is the
+ * field that matters, because a missing one would put the annotation on page 1 of a
+ * document it does not belong to.
+ *
+ * @param {Array<object>} annotations in paint order
+ */
+export function annotationsToState(annotations) {
+  if (!Array.isArray(annotations)) return initialAnnotationState
+
+  const byId = {}
+  const order = []
+
+  for (const annotation of annotations) {
+    if (!annotation || typeof annotation !== 'object') continue
+    const { id, pageIndex } = annotation
+    if (typeof id !== 'string' || !id) continue
+    if (!Number.isInteger(pageIndex) || pageIndex < 0) continue
+    // A duplicate id would make `order` and `byId` disagree about how many there are.
+    if (byId[id]) continue
+
+    byId[id] = annotation
+    order.push(id)
+  }
+
+  return { byId, order }
+}
+
 /* ------------------------------------------------------------------ *
  * Reducer
  * ------------------------------------------------------------------ */

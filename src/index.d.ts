@@ -230,6 +230,22 @@ export interface PDFViewerConfig {
   workerPort?: Worker
 
   /**
+   * How many documents to keep parsed in memory. Defaults to 3; `0` switches it off.
+   *
+   * Only matters when one viewer shows several documents in turn — see `documentId`.
+   * Returning to a document already visited is then instant: no re-fetch, no re-parse, no
+   * loading state, and the scroll position comes back with it.
+   *
+   * The cost is memory, and only part of it is predictable. Each cached document holds the
+   * file's pristine bytes — `documentCacheSize × file size`, a figure you can compute —
+   * plus pdf.js's own structures on top, which depend on the document's content rather than
+   * its byte count: a scanned document full of large images costs far more than a text one
+   * of the same size. Measure with real files rather than trusting an estimate, and lower
+   * this if your documents are large.
+   */
+  documentCacheSize?: number
+
+  /**
    * The signature image, registered under the reserved asset id `'specimen'`.
    *
    * This is what `hasSpecimen` counts. A seal from `stampAssets` or an image the user
@@ -265,6 +281,37 @@ export interface PDFViewerConfig {
    * component and give you `hasSpecimen` and `hasAnnotation` separately.
    */
   onAnnotationsChange?: (counts: AnnotationCounts) => void
+
+  /**
+   * Every annotation, whenever any of them changes. This is the door for saving a draft.
+   *
+   * Distinct from `onAnnotationsChange`, which reports counts and does not fire when a
+   * stamp merely moves — a move changes nothing to count but everything to save. Store
+   * what arrives here keyed by `documentId` and hand it back through
+   * `initialAnnotations` when the user returns to that document.
+   *
+   * The array is JSON-safe, so it can go straight to `localStorage` or an API. One
+   * caveat: an image annotation records only its `assetId`, so it renders again only if
+   * that asset is in `stampAssets` (or is `specimenAsset`) next time. Images the user
+   * uploaded into the viewer live only in that viewer's memory and do not survive a
+   * reload — persist those as a data URL under a stable id if drafts must keep them.
+   */
+  onAnnotationsSnapshot?: (
+    annotations: Annotation[],
+    context: { documentId: string | number | undefined }
+  ) => void
+
+  /**
+   * Annotations to start this document with — what `getAnnotations()` returned earlier,
+   * handed straight back.
+   *
+   * Read only when `documentId` changes, like `defaultValue` on an input rather than a
+   * controlled prop. That is deliberate: hosts store what `onAnnotationsSnapshot` reports
+   * and so change this on every edit, and reacting to that would never settle. To load
+   * annotations at any other moment, call `viewer.setAnnotations()`.
+   */
+  initialAnnotations?: Annotation[]
+
   /** Fired when `hasSpecimen` changes. See `useViewerState` for the modern form. */
   onSpecimenChange?: (hasSpecimen: boolean) => void
   /** Called when the document fails to load. */
@@ -312,6 +359,8 @@ export interface PDFViewerHandle {
   redo(): void
   /** Current annotations, in paint order. */
   getAnnotations(): Annotation[]
+  /** Replace every annotation. Clears undo history. */
+  setAnnotations(annotations: Annotation[]): void
   /**
    * Flatten every annotation into a copy of the source PDF.
    *
@@ -324,6 +373,20 @@ export interface PDFViewerHandle {
 
 export interface PDFViewerProps {
   src: PdfSource
+  /**
+   * Which document the annotations belong to.
+   *
+   * Pass it when one mounted viewer shows several documents in turn — a tab per attachment,
+   * say. Changing it empties the annotation store and re-seeds it from
+   * `config.initialAnnotations`, so annotations cannot follow the user from one document to
+   * the next. Leave it out and nothing changes: a viewer showing one document needs it no
+   * more than it ever did.
+   *
+   * Keep it stable for as long as the document is open. Going from `undefined` to an id is
+   * treated as "the id is now known" and keeps whatever has been drawn, so a value arriving
+   * from a fetch does not discard work.
+   */
+  documentId?: string | number
   config?: PDFViewerConfig
   /** Handle from `usePdfViewer()`. The recommended way to read state and drive it. */
   viewer?: PdfViewerHandle
@@ -379,6 +442,12 @@ export interface PdfViewerHandle {
 
   getFlattenedPDF(): Promise<Blob>
   getAnnotations(): Annotation[]
+  /**
+   * Replace every annotation — restoring a draft that arrived after the viewer mounted,
+   * which `config.initialAnnotations` cannot do because it is read only on a document
+   * change. Clears undo history, so one Ctrl+Z cannot discard what was just loaded.
+   */
+  setAnnotations(annotations: Annotation[]): void
 
   addTextStamp(options?: {
     text?: string
@@ -432,3 +501,49 @@ export declare function useViewerState<T>(
   viewer: PdfViewerHandle | null,
   selector: (state: ViewerState) => T
 ): T
+
+/* ------------------------------------------------------------------ *
+ * Export without a viewer
+ * ------------------------------------------------------------------ */
+
+export interface FlattenPdfOptions {
+  /** Whatever you would pass to `<PDFViewer src>`. */
+  src: PdfSource
+  /** As returned by `getAnnotations()`. Omitted or empty gives back the source unchanged. */
+  annotations?: Annotation[]
+  /**
+   * The same registry the component takes. An image annotation records only its `assetId`,
+   * so its asset has to be here for the image to appear — one that is missing is skipped
+   * rather than failing the export.
+   *
+   * An entry is identified by its `src`, which may be a data URL.
+   */
+  stampAssets?: Record<string, string | StampAsset> | StampAsset[]
+  /** As passed to `config.specimenAsset`. */
+  specimenAsset?: string
+  /** Extra rotation per page index, as the viewer's rotate buttons would apply. */
+  pageRotations?: Record<number, number>
+  /** Defaults to true, matching the component. */
+  rotateExportedPages?: boolean
+}
+
+/**
+ * Flatten annotations into a PDF without a mounted viewer.
+ *
+ * `viewer.getFlattenedPDF()` can only export the document on screen, which is the wrong
+ * shape for a host holding several — a review workflow with a tab per attachment, where
+ * Submit has to produce every file with its own annotations. This is the same export
+ * pipeline with the component left out, so that becomes a loop:
+ *
+ * ```ts
+ * const files = await Promise.all(
+ *   attachments.map(async (file) => ({
+ *     id: file.id,
+ *     blob: await flattenPdf({ src: file.url, annotations: draft[file.id] ?? [], stampAssets }),
+ *   }))
+ * )
+ * ```
+ *
+ * Attachments the reviewer never opened come through too, with no annotations.
+ */
+export declare function flattenPdf(options: FlattenPdfOptions): Promise<Blob>

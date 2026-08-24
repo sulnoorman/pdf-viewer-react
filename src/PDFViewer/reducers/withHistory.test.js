@@ -10,6 +10,8 @@ import {
   commitTransaction,
   cancelTransaction,
   clearHistory,
+  resetHistory,
+  adoptDocument,
 } from './withHistory.js'
 import {
   annotationReducer,
@@ -92,6 +94,83 @@ describe('history mechanics', () => {
     expect(cleared.present).toEqual(state.present)
     expect(canUndo(cleared)).toBe(false)
     expect(canRedo(cleared)).toBe(false)
+  })
+})
+
+describe('reset', () => {
+  const reducer = withHistory(counter)
+
+  it('installs a new present and drops the whole history at once', () => {
+    /*
+     * Atomicity is the point. Replacing the state and clearing the history as two separate
+     * dispatches leaves one commit in between where `past` still belongs to the previous
+     * subject — and a Ctrl+Z landing in that gap would discard what was just installed.
+     */
+    const state = run(reducer, createHistoryState({ n: 0 }, 'a'), [
+      { type: 'inc' },
+      { type: 'inc' },
+      undo(),
+    ])
+    expect(canUndo(state)).toBe(true)
+    expect(canRedo(state)).toBe(true)
+
+    const reset = reducer(state, resetHistory({ n: 99 }, 'b'))
+    expect(reset.present).toEqual({ n: 99 })
+    expect(canUndo(reset)).toBe(false)
+    expect(canRedo(reset)).toBe(false)
+    expect(reset.documentId).toBe('b')
+  })
+
+  it('abandons an open transaction', () => {
+    // A reset arriving mid-gesture has already invalidated whatever was being dragged.
+    const state = run(reducer, createHistoryState({ n: 0 }), [beginTransaction(), { type: 'inc' }])
+    const reset = reducer(state, resetHistory({ n: 5 }))
+    expect(reset.txDepth).toBe(0)
+    expect(reset.txBase).toBeNull()
+  })
+})
+
+describe('documentId', () => {
+  const reducer = withHistory(counter)
+
+  it('survives every action that rebuilds the state object', () => {
+    /*
+     * Two cases used to build their result as a bare literal, which silently drops any
+     * field added to the state later. That is exactly how the identity would have gone
+     * missing on the first edit after a document switch — leaving the store unable to say
+     * which document it held.
+     */
+    let state = createHistoryState({ n: 0 }, 'doc-1')
+
+    state = reducer(state, { type: 'inc' }) // the default branch
+    expect(state.documentId).toBe('doc-1')
+
+    state = reducer(state, beginTransaction())
+    state = reducer(state, { type: 'inc' })
+    state = reducer(state, commitTransaction()) // the commit branch
+    expect(state.documentId).toBe('doc-1')
+
+    for (const action of [undo(), redo(), clearHistory()]) {
+      state = reducer(state, action)
+      expect(state.documentId).toBe('doc-1')
+    }
+  })
+
+  it('is recorded by adopt without disturbing the state', () => {
+    const state = run(reducer, createHistoryState({ n: 0 }), [{ type: 'inc' }])
+    const adopted = reducer(state, adoptDocument('late-id'))
+
+    expect(adopted.documentId).toBe('late-id')
+    expect(adopted.present).toBe(state.present)
+    // The history is untouched: adopting an id is not an edit.
+    expect(adopted.past).toBe(state.past)
+    expect(canUndo(adopted)).toBe(true)
+  })
+
+  it('treats adopting the same id as a no-op', () => {
+    // Returning a new object would re-render every consumer for nothing.
+    const state = createHistoryState({ n: 0 }, 'same')
+    expect(reducer(state, adoptDocument('same'))).toBe(state)
   })
 })
 

@@ -31,6 +31,8 @@ export const HISTORY_ACTIONS = Object.freeze({
   COMMIT_TRANSACTION: 'history/commitTransaction',
   CANCEL_TRANSACTION: 'history/cancelTransaction',
   CLEAR: 'history/clear',
+  RESET: 'history/reset',
+  ADOPT: 'history/adopt',
 })
 
 export const undo = () => ({ type: HISTORY_ACTIONS.UNDO })
@@ -40,15 +42,48 @@ export const commitTransaction = () => ({ type: HISTORY_ACTIONS.COMMIT_TRANSACTI
 export const cancelTransaction = () => ({ type: HISTORY_ACTIONS.CANCEL_TRANSACTION })
 export const clearHistory = () => ({ type: HISTORY_ACTIONS.CLEAR })
 
+/**
+ * Install a new present and throw the history away, in one step.
+ *
+ * Used when the viewer moves to another document, and when a saved draft is loaded over
+ * whatever was there. It has to be atomic: replacing the state and clearing the history as
+ * two dispatches leaves one commit in between where `past` still belongs to the previous
+ * document, and a Ctrl+Z landing in that gap would discard the annotations just restored.
+ *
+ * @template S
+ * @param {S} present
+ * @param {unknown} [documentId] the subject the new present belongs to
+ */
+export const resetHistory = (present, documentId) => ({
+  type: HISTORY_ACTIONS.RESET,
+  present,
+  documentId,
+})
+
+/**
+ * Record which subject the current state belongs to, without touching the state itself.
+ *
+ * Needed for the changes that are *not* a reset — an id that was simply not known yet when
+ * the state was created. Without recording it, later comparisons keep measuring against
+ * the original blank and a genuine change would never be seen as one.
+ *
+ * @param {unknown} documentId
+ */
+export const adoptDocument = (documentId) => ({ type: HISTORY_ACTIONS.ADOPT, documentId })
+
 export const DEFAULT_HISTORY_LIMIT = 100
 
 /**
  * @template S
  * @param {S} present
- * @returns {{past: S[], present: S, future: S[], txDepth: number, txBase: S|null}}
+ * @param {unknown} [documentId] opaque identity for whatever this history is about. The
+ *   wrapper never interprets it; it is carried here so that "which subject does this state
+ *   belong to?" is answerable from the state itself, during render, without a second state
+ *   atom that could drift out of step with it.
+ * @returns {{past: S[], present: S, future: S[], txDepth: number, txBase: S|null, documentId: unknown}}
  */
-export function createHistoryState(present) {
-  return { past: [], present, future: [], txDepth: 0, txBase: null }
+export function createHistoryState(present, documentId) {
+  return { past: [], present, future: [], txDepth: 0, txBase: null, documentId }
 }
 
 export const canUndo = (state) => state.past.length > 0
@@ -108,7 +143,11 @@ export function withHistory(reducer, { limit = DEFAULT_HISTORY_LIMIT } = {}) {
         // A gesture that changed nothing must not create an undo step.
         if (txBase === present) return { ...state, txDepth: 0, txBase: null }
 
+        // Spread rather than a bare literal: a literal silently drops any field added to
+        // the state later, which is how `documentId` would have gone missing on the first
+        // drag after a document switch.
         return {
+          ...state,
           past: pushPast(past, txBase, limit),
           present,
           future: [],
@@ -125,6 +164,15 @@ export function withHistory(reducer, { limit = DEFAULT_HISTORY_LIMIT } = {}) {
       case HISTORY_ACTIONS.CLEAR:
         return { ...state, past: [], future: [] }
 
+      case HISTORY_ACTIONS.RESET:
+        // Also drops any open transaction: a reset that arrived mid-gesture has already
+        // invalidated whatever that gesture was moving.
+        return createHistoryState(action.present, action.documentId)
+
+      case HISTORY_ACTIONS.ADOPT:
+        if (state.documentId === action.documentId) return state
+        return { ...state, documentId: action.documentId }
+
       default: {
         const next = reducer(present, action)
         // Reducers return the same reference when an action is a no-op.
@@ -133,6 +181,7 @@ export function withHistory(reducer, { limit = DEFAULT_HISTORY_LIMIT } = {}) {
         if (txDepth > 0) return { ...state, present: next }
 
         return {
+          ...state,
           past: pushPast(past, present, limit),
           present: next,
           future: [],

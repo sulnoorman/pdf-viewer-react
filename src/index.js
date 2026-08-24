@@ -16,6 +16,13 @@ export { DEFAULT_LABELS } from './PDFViewer/labels.js'
 export { ANNOTATION_TYPES } from './PDFViewer/reducers/annotationReducer.js'
 
 /**
+ * Flatten annotations into a PDF without a mounted viewer. For hosts holding several
+ * documents at once — a tab per attachment — where Submit has to produce every file with
+ * its own annotations, not just the one on screen.
+ */
+export { flattenPdf } from './PDFViewer/utils/flattenPdf.js'
+
+/**
  * The toolbar's shipped order. Filter it rather than writing `displayActions` out by
  * hand, so hiding one control does not lock you out of controls added later.
  */
