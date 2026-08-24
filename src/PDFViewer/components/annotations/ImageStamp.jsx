@@ -20,6 +20,7 @@ function ImageStampComponent({
   onEdit,
   onDuplicate,
   onDelete,
+  constrainDraft,
   isDraggingRef,
 }) {
   return (
@@ -31,6 +32,7 @@ function ImageStampComponent({
       lockAspectRatio
       rotatable
       opacity={annotation.opacity ?? 1}
+      constrainDraft={constrainDraft}
       isDraggingRef={isDraggingRef}
       onSelect={() => onSelect(annotation.id)}
       onCommit={(rect, rotation, node) => onCommit(annotation.id, rect, rotation, node)}

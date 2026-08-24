@@ -155,6 +155,194 @@ export function moveRect(rect, delta) {
   return { ...rect, x: rect.x + delta.x, y: rect.y + delta.y }
 }
 
+/**
+ * Half the width and height of a rotated box's bounding box.
+ *
+ * A rect describes the box before rotation, so this is what the box actually occupies on
+ * screen — a tall box turned on its side reaches out by its height, not its width.
+ */
+export function rotatedHalfExtents({ width, height }, rotation = 0) {
+  const rad = toRadians(normalizeAngle(rotation))
+  const cos = Math.abs(Math.cos(rad))
+  const sin = Math.abs(Math.sin(rad))
+  return {
+    x: (width * cos + height * sin) / 2,
+    y: (width * sin + height * cos) / 2,
+  }
+}
+
+/**
+ * Slide a rect the shortest distance that brings it fully inside `bounds`.
+ *
+ * Annotations are stored in page coordinates, and nothing used to stop a drag carrying one
+ * off the page. Dropped there, its coordinates go negative and the exported PDF draws the
+ * stamp partly or wholly outside the page — so the signature silently vanishes.
+ *
+ * Applied on release rather than during the gesture, deliberately. Clamping live would
+ * pin the box to the page it started on, which would take away dragging an annotation to
+ * another page — a feature that was itself a fix (see utils/pageHitTest.js).
+ *
+ * **A rect already inside is returned unchanged, by identity.** That is the property that
+ * matters: dropping an annotation in the middle of a page must not nudge it, so the only
+ * time anything moves is when it really was hanging over an edge.
+ *
+ * Rotation is accounted for: the visible bounding box of a rotated stamp is larger than
+ * its rect, so clamping the rect alone would still let a corner stick out at 45°.
+ *
+ * @param {Rect} rect in frame space
+ * @param {number} [rotation] the object's own rotation, degrees clockwise
+ * @param {{width: number, height: number}} bounds the page, in the same units
+ * @returns {Rect} `rect` itself when it already fits, otherwise a moved copy
+ */
+export function containRect(rect, rotation = 0, bounds) {
+  if (!bounds?.width || !bounds?.height) return rect
+
+  const half = rotatedHalfExtents(rect, rotation)
+  const centre = rectCenter(rect)
+
+  // A box bigger than the page has no position that fits, so the range inverts. Centring
+  // it spreads the overhang evenly instead of jamming it against one edge — and, more to
+  // the point, avoids returning a NaN that would poison every later calculation.
+  const axis = (value, halfExtent, size) =>
+    halfExtent * 2 > size ? size / 2 : Math.min(Math.max(value, halfExtent), size - halfExtent)
+
+  const x = axis(centre.x, half.x, bounds.width)
+  const y = axis(centre.y, half.y, bounds.height)
+  if (x === centre.x && y === centre.y) return rect
+
+  return { ...rect, x: x - rect.width / 2, y: y - rect.height / 2 }
+}
+
+/**
+ * Slide a rect the shortest distance that satisfies a set of per-side limits.
+ *
+ * The live counterpart to `containRect`: that one runs on release and answers to one
+ * whole page, this one runs on every pointermove and answers to whichever sides actually
+ * constrain the gesture. A `null` side is unconstrained, which is what lets a stamp be
+ * dragged from one page to the next — a page in the middle of the document has no top and
+ * no bottom, only a left and a right.
+ *
+ * Rotation is accounted for through `rotatedHalfExtents`, so a stamp turned 45° is held by
+ * its corners rather than by its unrotated box.
+ *
+ * Returns `rect` itself when nothing needs to move, so dragging through open page area
+ * allocates nothing and cannot introduce a wobble.
+ *
+ * @param {Rect} rect
+ * @param {number} [rotation] degrees clockwise
+ * @param {{left?: number|null, right?: number|null, top?: number|null, bottom?: number|null}} limits
+ * @returns {Rect} `rect` itself when it already fits, otherwise a moved copy
+ */
+export function clampRectInto(rect, rotation = 0, limits) {
+  if (!limits) return rect
+
+  const half = rotatedHalfExtents(rect, rotation)
+  const centre = rectCenter(rect)
+
+  /*
+   * Both sides of an axis can be given at once, and when the box is wider than the space
+   * between them the two limits contradict each other. Applying the low limit last would
+   * silently win; splitting the difference keeps the overhang even and, more importantly,
+   * keeps the result finite.
+   */
+  const axis = (value, halfExtent, low, high) => {
+    const min = low == null ? null : low + halfExtent
+    const max = high == null ? null : high - halfExtent
+    if (min != null && max != null && min > max) return (min + max) / 2
+    let next = value
+    if (min != null) next = Math.max(next, min)
+    if (max != null) next = Math.min(next, max)
+    return next
+  }
+
+  const x = axis(centre.x, half.x, limits.left, limits.right)
+  const y = axis(centre.y, half.y, limits.top, limits.bottom)
+  if (x === centre.x && y === centre.y) return rect
+
+  return { ...rect, x: x - rect.width / 2, y: y - rect.height / 2 }
+}
+
+/**
+ * Shrink a rect until it fits inside `limits`, holding the corner opposite `handle` still.
+ *
+ * Sliding a box that is being resized would be wrong: the handle under the cursor has to
+ * stay under the cursor, and the anchor corner has to stay where `resizeRect` pinned it.
+ * So an over-large resize is answered by giving back size, not position — the dragged edge
+ * stops dead at the boundary while the rest of the box holds.
+ *
+ * `lockAspectRatio` matters here for the same reason it does in `resizeRect`: images are
+ * always ratio-locked, so capping one axis has to pull the other with it or the stamp
+ * distorts the moment it touches an edge.
+ *
+ * @param {object} params
+ * @param {Rect} params.rect the rect `resizeRect` just produced
+ * @param {number} [params.rotation] degrees clockwise
+ * @param {string} params.handle the handle being dragged
+ * @param {{left?: number|null, right?: number|null, top?: number|null, bottom?: number|null}} params.limits
+ * @param {boolean} [params.lockAspectRatio]
+ * @param {number} [params.minSize]
+ * @returns {Rect} `rect` itself when it already fits, otherwise a smaller copy
+ */
+export function shrinkRectInto({
+  rect,
+  rotation = 0,
+  handle,
+  limits,
+  lockAspectRatio = false,
+  minSize = MIN_BOX_SIZE,
+}) {
+  if (!limits) return rect
+
+  const { signX, signY } = handleSigns(handle)
+  const half = rotatedHalfExtents(rect, rotation)
+  const centre = rectCenter(rect)
+
+  /*
+   * How much room the box has on each axis, measured from the anchor outwards.
+   *
+   * An edge handle (signX or signY of 0) does not move that axis, but a rotated box still
+   * grows along it — so the room on such an axis is the whole span, measured from the
+   * centre both ways, not from one side.
+   */
+  const room = (sign, low, high, halfExtent, centreValue) => {
+    if (sign > 0) return high == null ? Infinity : high - (centreValue - halfExtent)
+    if (sign < 0) return low == null ? Infinity : centreValue + halfExtent - low
+    const before = low == null ? Infinity : centreValue - low
+    const after = high == null ? Infinity : high - centreValue
+    return Math.min(before, after) * 2
+  }
+
+  const roomX = room(signX, limits.left, limits.right, half.x, centre.x)
+  const roomY = room(signY, limits.top, limits.bottom, half.y, centre.y)
+
+  // The rotated extent is what has to fit, but the rect is what we can scale — and the
+  // two are proportional, so one ratio serves for both.
+  const factorX = half.x * 2 > roomX ? roomX / (half.x * 2) : 1
+  const factorY = half.y * 2 > roomY ? roomY / (half.y * 2) : 1
+  if (factorX >= 1 && factorY >= 1) return rect
+
+  // Ratio-locked, the tighter axis governs both; otherwise each axis takes its own.
+  const scaleX = lockAspectRatio ? Math.min(factorX, factorY) : factorX
+  const scaleY = lockAspectRatio ? Math.min(factorX, factorY) : factorY
+
+  const width = Math.max(minSize, rect.width * scaleX)
+  const height = Math.max(minSize, rect.height * scaleY)
+
+  // Put the anchor corner back exactly where it was. Rotating the size change into frame
+  // space is the same correction `resizeRect` applies, and for the same reason.
+  const shift = rotatePoint(
+    { x: (signX * (width - rect.width)) / 2, y: (signY * (height - rect.height)) / 2 },
+    rotation
+  )
+
+  return {
+    x: centre.x + shift.x - width / 2,
+    y: centre.y + shift.y - height / 2,
+    width,
+    height,
+  }
+}
+
 /** Angle in degrees from a centre to a point, 0 = straight up, growing clockwise. */
 export function angleFromCenter(center, point) {
   const degrees = (Math.atan2(point.x - center.x, center.y - point.y) * 180) / Math.PI

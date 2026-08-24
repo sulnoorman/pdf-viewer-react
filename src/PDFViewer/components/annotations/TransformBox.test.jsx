@@ -178,6 +178,66 @@ describe('TransformBox gestures', () => {
     expect(onCommit).not.toHaveBeenCalled()
   })
 
+  describe('constrainDraft', () => {
+    /*
+     * The hook that holds an object inside its page while the pointer is still down.
+     * Correcting only on release was not enough: for the whole gesture the box floated
+     * outside the page — a page stops clipping during a gesture — which is exactly what
+     * "it goes through the edge" looked like.
+     */
+    it('paints and commits the constrained rect, not the raw one', () => {
+      // If the two ever diverged the box would visibly jump as the pointer lifted.
+      const constrainDraft = vi.fn((rect) => ({ ...rect, x: 0 }))
+      const { onCommit, content } = setup({ constrainDraft })
+
+      gesture(content(), { x: 150, y: 150 }, { x: 400, y: 175 })
+
+      expect(onCommit).toHaveBeenCalledTimes(1)
+      expect(onCommit.mock.calls[0][0]).toMatchObject({ x: 0, y: RECT.y + 25 })
+    })
+
+    it('reports a move with the gesture kind', () => {
+      const constrainDraft = vi.fn((rect) => rect)
+      const { content } = setup({ constrainDraft })
+
+      gesture(content(), { x: 150, y: 150 }, { x: 190, y: 175 })
+
+      const [rect, rotation, kind] = constrainDraft.mock.calls[0]
+      expect(kind).toBe('move')
+      expect(rotation).toBe(0)
+      expect(rect).toMatchObject({ x: RECT.x + 40, y: RECT.y + 25 })
+    })
+
+    it('reports a resize with the handle and the aspect lock', () => {
+      // Both are needed to shrink about the right anchor without distorting an image.
+      const constrainDraft = vi.fn((rect) => rect)
+      setup({ constrainDraft, lockAspectRatio: true })
+
+      gesture(document.querySelector('[data-handle="se"]'), { x: 300, y: 180 }, { x: 340, y: 200 })
+
+      const [, , kind, options] = constrainDraft.mock.calls[0]
+      expect(kind).toBe('resize')
+      expect(options).toMatchObject({ handle: 'se', lockAspectRatio: true })
+    })
+
+    it('is not consulted for a rotate', () => {
+      // Rotation does not move the centre, so constraining mid-spin could only fight the
+      // user. The commit-time clamp settles it instead.
+      const constrainDraft = vi.fn((rect) => rect)
+      setup({ constrainDraft })
+
+      gesture(document.querySelector('[data-rotate="true"]'), { x: 200, y: 60 }, { x: 260, y: 90 })
+
+      expect(constrainDraft).not.toHaveBeenCalled()
+    })
+
+    it('behaves exactly as before when not supplied', () => {
+      const { onCommit, content } = setup()
+      gesture(content(), { x: 150, y: 150 }, { x: 190, y: 175 })
+      expect(onCommit.mock.calls[0][0]).toMatchObject({ x: RECT.x + 40, y: RECT.y + 25 })
+    })
+  })
+
   it('selects but does not drag from a child marked data-no-drag', () => {
     const onSelect = vi.fn()
     const onCommit = vi.fn()

@@ -173,9 +173,6 @@ A text box takes a double-click to edit because a single click drags it — the 
 pdf.js and every canvas editor makes. A box that was just created skips this and opens
 straight into typing, so "add text" and host actions that insert text are unaffected.
 
-Objects can be dragged **across page boundaries**; they are reassigned to whichever page
-they end up over.
-
 **Which page a new object lands on.** Stamps, images and text boxes are placed on the
 *active* page — the one the page indicator shows, and the one `activePageIndex` reports.
 With two pages sharing the screen, the **later** one wins, so scrolling down to a page and
@@ -183,6 +180,22 @@ stamping puts the stamp there rather than on the page above. A page has to cover
 quarter of the viewport to count, so a sliver at the bottom edge does not take over.
 
 Use `viewer.goToPage(i)` to place somewhere else deliberately.
+
+**Objects cannot be moved outside the document.** While you drag or resize one it is held
+at the edge: the left and right edges of its page always bind, and the top and bottom bind
+on the first and last page — the edges of the document itself. Between pages it moves
+freely, so it can still be carried onto the next page, and the page stops clipping mid-drag
+so it stays visible the whole way across. Resizing against an edge stops the object growing
+rather than sliding it, so the handle stays under your cursor.
+
+On release it settles fully inside whichever page it covers most — never straddling two.
+Released between pages or off to the side, it goes to the nearest one. An object dropped in
+open page area does not move at all, and a rotated object is held by its rotated corners, so
+nothing overhangs at any angle.
+
+That last rule is why an object cannot rest across a boundary: an exported PDF draws each
+annotation into one page, and anything outside that page is not rendered — so a stamp left
+straddling would come out cut in half.
 
 **Keyboard**
 

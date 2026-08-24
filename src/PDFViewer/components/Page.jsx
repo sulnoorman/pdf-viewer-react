@@ -9,7 +9,12 @@ import { useTools } from '../context/ToolContext.jsx'
 import { useAnnotationActions, usePageAnnotations } from '../context/AnnotationContext.jsx'
 import { viewRectToScreen, displayPageSize } from '../utils/coords.js'
 import { resolveDropTarget } from '../utils/pageHitTest.js'
-import { rotatePoint } from '../utils/transform.js'
+import {
+  rotatePoint,
+  containRect,
+  clampRectInto,
+  shrinkRectInto,
+} from '../utils/transform.js'
 import styles from './Page.module.css'
 
 /** How long to coast on a CSS transform before re-rasterising at the new scale. */
@@ -44,6 +49,7 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
   // Known up front from the document load, so the page reserves the right space
   // before anything has been rasterised.
   const baseSize = pageSizes[pageIndex] ?? { width: 0, height: 0 }
+  const pageCount = pageSizes.length
 
   useEffect(() => {
     if (scale === debouncedScale) return
@@ -151,6 +157,12 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
    * It also resolves which page the object ended up over, so an annotation dragged
    * past a page boundary lands on the page it visually belongs to. The whole gesture
    * arrives as one update, hence one undo step — no transaction needed.
+   *
+   * And it is where the object is brought back inside its page. A gesture is left
+   * completely free while the pointer is down — that is what lets a stamp be carried
+   * smoothly onto the next page — so the boundary is enforced once, here, on release.
+   * `containRect` moves the shortest distance that fits, and returns the rect untouched
+   * when it already did, so a drop in open page area does not nudge anything.
    */
   const commitTransform = useCallback(
     (id, rect, rotation, node) => {
@@ -186,14 +198,28 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
           y: inWrapper.y / scale + targetBase.height / 2,
         }
 
+        // Bounded by the page it landed on, not the one it came from — those can be
+        // different sizes, and a stamp dropped near the edge of a smaller page has to
+        // answer to that page's edge.
+        const contained = containRect(
+          { x: centre.x - width / 2, y: centre.y - height / 2, width, height },
+          rotation,
+          targetBase
+        )
+
         patch.pageIndex = dropped.pageIndex
-        patch.x = centre.x - width / 2
-        patch.y = centre.y - height / 2
+        patch.x = contained.x
+        patch.y = contained.y
       } else {
         // Same page: the rect is already in this page's base view space, because
         // TransformBox positions inside the rotated wrapper.
-        patch.x = rect.x / scale
-        patch.y = rect.y / scale
+        const contained = containRect(
+          { x: rect.x / scale, y: rect.y / scale, width, height },
+          rotation,
+          pageSizes[pageIndex]
+        )
+        patch.x = contained.x
+        patch.y = contained.y
       }
 
       actions.update(id, patch)
@@ -201,8 +227,44 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
     [actions, scale, pageIndex, pageRotations, pageSizes]
   )
 
+  /**
+   * The edges a gesture on this page may not cross, in the same screen pixels
+   * `TransformBox` works in — `.rotator` is `baseSize * scale`, so no conversion.
+   *
+   * Left and right bind on every page: a stamp may never hang off the side, and there is
+   * nothing out there to move it to. Top and bottom are `null` in the middle of the
+   * document, which is what keeps dragging a stamp onto the next page working; only the
+   * very first page has a top and only the very last has a bottom, because those are the
+   * edges of the document itself.
+   */
+  const gestureLimits = useMemo(() => {
+    if (!baseSize.width || !baseSize.height) return null
+    return {
+      left: 0,
+      right: baseSize.width * scale,
+      top: pageIndex === 0 ? 0 : null,
+      bottom: pageIndex === pageCount - 1 ? baseSize.height * scale : null,
+    }
+  }, [baseSize.width, baseSize.height, scale, pageIndex, pageCount])
+
+  /** Holds a live gesture inside `gestureLimits`. See TransformBox's `constrainDraft`. */
+  const constrainDraft = useCallback(
+    (rect, rotation, kind, { handle, lockAspectRatio } = {}) => {
+      if (!gestureLimits) return rect
+      return kind === 'resize'
+        ? shrinkRectInto({ rect, rotation, handle, limits: gestureLimits, lockAspectRatio })
+        : clampRectInto(rect, rotation, gestureLimits)
+    },
+    [gestureLimits]
+  )
+
   const editAnnotation = useCallback((id, patch) => actions.update(id, patch), [actions])
-  const duplicateAnnotation = useCallback((id) => actions.duplicate(id), [actions])
+  // The page size goes with it, so a copy of a stamp in the corner is nudged back inside
+  // rather than offset off the sheet.
+  const duplicateAnnotation = useCallback(
+    (id) => actions.duplicate(id, undefined, pageSizes[pageIndex]),
+    [actions, pageSizes, pageIndex]
+  )
   const commitInk = useCallback((annotation) => actions.add(annotation), [actions])
 
   const removeAnnotation = useCallback(
@@ -348,6 +410,7 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
                 onDelete={removeAnnotation}
                 onGestureStart={actions.beginGesture}
                 onGestureEnd={actions.endGesture}
+                constrainDraft={constrainDraft}
                 isDraggingRef={isDraggingRef}
               />
             ) : (
@@ -363,6 +426,7 @@ export function Page({ pageNumber, registerPage, shouldRender = true }) {
                 onEdit={editAnnotation}
                 onDuplicate={duplicateAnnotation}
                 onDelete={removeAnnotation}
+                constrainDraft={constrainDraft}
                 isDraggingRef={isDraggingRef}
               />
             )

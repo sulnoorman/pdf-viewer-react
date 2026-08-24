@@ -26,6 +26,7 @@ import {
 } from './reducers/annotationReducer.js'
 import { exportFlattenedPdf } from './utils/exportPdf.js'
 import { displayPageSize, normalizeRotation } from './utils/coords.js'
+import { containRect } from './utils/transform.js'
 import { deriveViewerState, sameCounts } from './utils/viewerState.js'
 import { useStampAssets, ASSET_KINDS, ASSET_SOURCES } from './hooks/useStampAssets.js'
 import { usePdfViewer } from './viewer/usePdfViewer.js'
@@ -328,10 +329,19 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
     (id) => {
       const target = id ?? tools.activeIdRef.current
       if (!target) return false
-      actions.duplicate(target)
+      /*
+       * Bounded, or duplicating a stamp already tucked into a corner offsets the copy
+       * straight off the page. The toolbar's own duplicate button goes through Page.jsx,
+       * which passes these too; this is the Ctrl+D and `duplicateSelected()` door.
+       *
+       * The bounds come from the annotation's OWN page, not the page on screen — the copy
+       * stays where its original was, and those can be different sizes.
+       */
+      const source = actions.getSnapshot().byId[target]
+      actions.duplicate(target, undefined, source ? pageSizes[source.pageIndex] : undefined)
       return true
     },
-    [actions, tools]
+    [actions, tools, pageSizes]
   )
 
   const copyActive = useCallback(() => {
@@ -349,23 +359,46 @@ export function PDFViewerInner({ src, config = {}, viewerRef, viewer }) {
 
     // Pasted onto whatever page the user is looking at now, offset a little so it
     // does not hide the original when pasting onto the same page.
+    const pageIndex = activePageRef.current
     const offset = 16
+
+    /*
+     * The offset is trimmed to whatever room the destination page has.
+     *
+     * This path needed it most: it keeps the source coordinates but swaps the page, so
+     * copying from a large page and pasting onto a smaller one could land the copy well
+     * outside — and unlike a drag, there is no gesture afterwards to correct it.
+     *
+     * Ink is left alone: a stroke is a list of absolute points with no rect to clamp.
+     */
+    let dx = offset
+    let dy = offset
+    if (!Array.isArray(source.points)) {
+      const contained = containRect(
+        { x: source.x + offset, y: source.y + offset, width: source.width, height: source.height },
+        source.rotation ?? 0,
+        pageSizes[pageIndex]
+      )
+      dx = contained.x - source.x
+      dy = contained.y - source.y
+    }
+
     const copy = {
       ...source,
       id: undefined,
-      pageIndex: activePageRef.current,
-      x: source.x + offset,
-      y: source.y + offset,
+      pageIndex,
+      x: source.x + dx,
+      y: source.y + dy,
     }
     if (Array.isArray(source.points)) {
-      copy.points = source.points.map((p) => ({ x: p.x + offset, y: p.y + offset }))
+      copy.points = source.points.map((p) => ({ x: p.x + dx, y: p.y + dy }))
     }
 
     const annotation = { ...copy, id: createId(source.type) }
     actions.add(annotation)
     tools.setActiveId(annotation.id)
     return true
-  }, [actions, activePageRef, tools])
+  }, [actions, activePageRef, tools, pageSizes])
 
   const deleteActive = useCallback(() => {
     const id = tools.activeIdRef.current

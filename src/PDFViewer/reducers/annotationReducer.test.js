@@ -185,6 +185,56 @@ describe('DUPLICATE', () => {
     ])
     expect(copy).toMatchObject({ x: 5, y: 5, width: 10, height: 10 })
   })
+
+  describe('with page bounds', () => {
+    const PAGE = { width: 600, height: 800 }
+
+    /** A text box of a known size at a given spot. */
+    const seed = (x, y) =>
+      annotationReducer(
+        initialAnnotationState,
+        addAnnotation(createTextAnnotation({ id: 'a', x, y, width: 100, height: 40, text: 'hi' }))
+      )
+
+    it('offsets normally with room to spare', () => {
+      const state = annotationReducer(seed(10, 20), duplicateAnnotation('a', 12, PAGE))
+      expect(state.byId[state.order[1]]).toMatchObject({ x: 22, y: 32 })
+    })
+
+    it('holds the copy inside when the original hugs the far corner', () => {
+      // Without this the copy of a stamp tucked into the bottom-right corner lands off
+      // the page, where the export draws it partly or wholly off the sheet.
+      const state = annotationReducer(seed(500, 760), duplicateAnnotation('a', 12, PAGE))
+      expect(state.byId[state.order[1]]).toMatchObject({ x: 500, y: 760 })
+    })
+
+    it('still offsets on the axis that has room', () => {
+      // Flush against the bottom but with space to the right: the copy should slide
+      // right and stay put vertically, not refuse to move at all.
+      const state = annotationReducer(seed(100, 760), duplicateAnnotation('a', 12, PAGE))
+      expect(state.byId[state.order[1]]).toMatchObject({ x: 112, y: 760 })
+    })
+
+    it('leaves ink alone, which has no rect to clamp', () => {
+      const seeded = annotationReducer(
+        initialAnnotationState,
+        addAnnotation(
+          createInkAnnotation({
+            id: 'i',
+            points: [
+              { x: 0, y: 0 },
+              { x: 10, y: 10 },
+            ],
+          })
+        )
+      )
+      const state = annotationReducer(seeded, duplicateAnnotation('i', 5, PAGE))
+      expect(state.byId[state.order[1]].points).toEqual([
+        { x: 5, y: 5 },
+        { x: 15, y: 15 },
+      ])
+    })
+  })
 })
 
 describe('z-order', () => {

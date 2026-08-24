@@ -42,6 +42,7 @@ function TextStampComponent({
   onDelete,
   onGestureStart,
   onGestureEnd,
+  constrainDraft,
   isDraggingRef,
 }) {
   const labels = useLabels()
@@ -77,6 +78,7 @@ function TextStampComponent({
       selected={isActive}
       rotatable
       opacity={annotation.opacity ?? 1}
+      constrainDraft={constrainDraft}
       isDraggingRef={isDraggingRef}
       onSelect={() => onSelect(annotation.id)}
       onCommit={(rect, rotation, node) => onCommit(annotation.id, rect, rotation, node)}

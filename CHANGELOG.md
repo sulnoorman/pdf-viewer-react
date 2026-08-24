@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Fixed
+
+- **An annotation could be dragged or resized off its page and left there.** Its stored
+  coordinates went negative and the exported PDF drew the stamp partly or wholly off the
+  sheet — a signature that looked placed and then wasn't there. Nothing had ever
+  constrained it; the gap only became reachable once dragging itself started working in
+  `0.1.2`.
+
+  There are now two rules, and they answer different moments:
+
+  **While the gesture is live**, the object is held at the edge. Left and right bind on
+  every page — there is nothing out there to move it to. Top and bottom bind only on the
+  first and last page, because those are the edges of the *document*; between pages it
+  travels freely, which is what keeps dragging a stamp onto the next page working. A page
+  also stops clipping during a gesture, so a stamp crossing a boundary stays visible the
+  whole way instead of being sliced in half. A resize answers an edge by giving back
+  **size** rather than position, so the handle stays under the cursor and the opposite
+  corner stays pinned; ratio-locked images shrink on both axes together.
+
+  **On release**, the object is settled fully inside whichever page it covers most — never
+  straddling two. That part is not cosmetic: pdf-lib draws into one page, and anything
+  outside that page's MediaBox is not rendered by any PDF reader, so an object left across
+  a boundary would export cut in half.
+
+  Both rules account for rotation: a stamp turned 45° is held by its rotated corners, not
+  by its unrotated box. And a drop in open page area moves nothing at all.
+
+- **Four paths could still place an annotation outside a page.** Each wrote coordinates
+  without consulting the page it was writing them onto: the annotation toolbar's duplicate
+  button, `Ctrl+D` / `viewer.duplicateSelected()`, and `Ctrl+C`/`Ctrl+V`. Paste was the
+  worst of them — it kept the source coordinates while switching the page, so copying from
+  a large page onto a smaller one landed the copy well outside, with no gesture afterwards
+  to correct it. Duplicate now measures against the annotation's **own** page rather than
+  the one on screen, since the copy stays beside its original.
+
+- **A drop that touched no page sent the annotation back to the page it came from.**
+  Releasing in the gutter between pages, or out in the margin when zoomed out, returned no
+  target at all — so a stamp dragged from page 1 to the gutter before page 5 reappeared on
+  page 1. The nearest page now wins. Overlap is still what decides a box straddling two
+  pages, and that rule is unchanged: the page it covers most gets it.
+
 ## 0.1.3
 
 ### Changed

@@ -46,7 +46,7 @@ export function AnnotationProvider({ children }) {
       add: (annotation) => dispatch(addAnnotation(annotation)),
       update: (id, patch) => dispatch(updateAnnotation(id, patch)),
       remove: (id) => dispatch(deleteAnnotation(id)),
-      duplicate: (id, offset) => dispatch(duplicateAnnotation(id, offset)),
+      duplicate: (id, offset, bounds) => dispatch(duplicateAnnotation(id, offset, bounds)),
 
       undo: () => dispatch(undo()),
       redo: () => dispatch(redo()),

@@ -9,6 +9,29 @@
   transform-origin: top;
 }
 
+/*
+ * A stamp being dragged is allowed out of its page.
+ *
+ * `overflow: hidden` above is what keeps a page's content — canvas, text layer, and any
+ * annotation sitting at rest near an edge — from spilling into the gutter. But it also
+ * sliced a dragged stamp in half the moment it crossed the boundary, so carrying one to
+ * the next page meant watching it disappear and reappear. Annotations are clamped back
+ * inside on release (see containRect in utils/transform.js), so nothing can come to rest
+ * outside a page and this only ever applies mid-gesture.
+ *
+ * `[data-transforming]` is set by TransformBox for the life of the gesture. It has to be
+ * an attribute, not a class: TransformBox has its own CSS module, so its hashed class
+ * names are not addressable from here.
+ *
+ * The box needs no z-index of its own — a box being dragged is always the selected one,
+ * and `.boxSelected` already carries 50 while page containers carry none, so it paints
+ * over its neighbours. The scroller's own `overflow: auto` still clips it, which is why
+ * it cannot fly out over the toolbar.
+ */
+.page:has([data-transforming]) {
+  overflow: visible;
+}
+
 /* Shown for pages outside the render window, which keep their size but no content. */
 .placeholder {
   position: absolute;

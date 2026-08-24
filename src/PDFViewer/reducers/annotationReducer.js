@@ -1,5 +1,6 @@
 import { createId } from '../utils/id.js'
 import { pointsBBox } from '../utils/coords.js'
+import { containRect } from '../utils/transform.js'
 
 /**
  * The annotation store.
@@ -145,10 +146,17 @@ export const updateAnnotation = (id, patch) => ({
   patch,
 })
 export const deleteAnnotation = (id) => ({ type: ANNOTATION_ACTIONS.DELETE, id })
-export const duplicateAnnotation = (id, offset) => ({
+/**
+ * @param {string} id
+ * @param {number} [offset] how far to shift the copy, in view units
+ * @param {{width: number, height: number}} [bounds] the page, so the copy cannot land
+ *   outside it. Omitted, the copy is offset unconditionally.
+ */
+export const duplicateAnnotation = (id, offset, bounds) => ({
   type: ANNOTATION_ACTIONS.DUPLICATE,
   id,
   offset,
+  bounds,
 })
 
 /* ------------------------------------------------------------------ *
@@ -215,16 +223,45 @@ export function annotationReducer(state = initialAnnotationState, action) {
       if (!source) return state
 
       const offset = action.offset ?? 12
+
+      /*
+       * The offset is nudged back if it would push the copy off the page.
+       *
+       * Duplicating a stamp already tucked into the bottom-right corner used to put its
+       * copy outside the page, where the export draws it partly or wholly off the sheet.
+       * Corrected inside this action rather than with an `update` afterwards, so the
+       * whole duplication stays one undo step.
+       *
+       * `bounds` is optional: callers without a page size still get the plain offset,
+       * which is the behaviour they had.
+       */
+      let dx = offset
+      let dy = offset
+      if (action.bounds && source.type !== ANNOTATION_TYPES.INK) {
+        const contained = containRect(
+          {
+            x: source.x + offset,
+            y: source.y + offset,
+            width: source.width,
+            height: source.height,
+          },
+          source.rotation ?? 0,
+          action.bounds
+        )
+        dx = contained.x - source.x
+        dy = contained.y - source.y
+      }
+
       const copy = {
         ...source,
         id: createId(source.type),
-        x: source.x + offset,
-        y: source.y + offset,
+        x: source.x + dx,
+        y: source.y + dy,
       }
       // Points carry absolute coordinates, so a duplicated stroke must be translated
       // too — otherwise the copy sits exactly on top of the original.
       if (copy.type === ANNOTATION_TYPES.INK) {
-        copy.points = source.points.map((p) => ({ x: p.x + offset, y: p.y + offset }))
+        copy.points = source.points.map((p) => ({ x: p.x + dx, y: p.y + dy }))
       }
 
       return {

@@ -10,6 +10,10 @@ import {
   snapAngle,
   normalizeAngle,
   pointOnRect,
+  containRect,
+  clampRectInto,
+  shrinkRectInto,
+  rotatedHalfExtents,
   RESIZE_HANDLES,
   MIN_BOX_SIZE,
 } from './transform.js'
@@ -275,5 +279,229 @@ describe('pointOnRect', () => {
     const se = pointOnRect(RECT, RESIZE_HANDLES.se)
     close(nw.x, se.x)
     close(nw.y, se.y)
+  })
+})
+
+describe('rotatedHalfExtents', () => {
+  it('is half the rect when unrotated', () => {
+    expect(rotatedHalfExtents(RECT)).toEqual({ x: 100, y: 50 })
+  })
+
+  it('swaps the axes at 90 degrees', () => {
+    const half = rotatedHalfExtents(RECT, 90)
+    close(half.x, 50)
+    close(half.y, 100)
+  })
+
+  it('grows in both axes at 45 degrees', () => {
+    // A 200x100 box turned 45 deg reaches out (200+100)/2/sqrt(2) each way.
+    const half = rotatedHalfExtents(RECT, 45)
+    close(half.x, 150 / Math.SQRT2)
+    close(half.y, 150 / Math.SQRT2)
+    expect(half.x).toBeGreaterThan(100)
+  })
+})
+
+describe('containRect', () => {
+  const PAGE = { width: 600, height: 800 }
+
+  it('returns the very same object when the rect already fits', () => {
+    /*
+     * The property the whole feature rests on. Dragging a stamp and dropping it in open
+     * page area must not move it by even a fraction of a point, so "already inside"
+     * has to be a true no-op — identity, not an equal copy.
+     */
+    const rect = { x: 100, y: 100, width: 200, height: 100 }
+    expect(containRect(rect, 0, PAGE)).toBe(rect)
+  })
+
+  it('treats an edge-flush rect as fitting', () => {
+    const flush = { x: 0, y: 0, width: 200, height: 100 }
+    expect(containRect(flush, 0, PAGE)).toBe(flush)
+
+    const opposite = { x: 400, y: 700, width: 200, height: 100 }
+    expect(containRect(opposite, 0, PAGE)).toBe(opposite)
+  })
+
+  it('slides a rect back in from each of the four edges', () => {
+    const size = { width: 200, height: 100 }
+    // Off the top: this is the reported bug — a specimen dragged above the page.
+    expect(containRect({ x: 100, y: -60, ...size }, 0, PAGE)).toMatchObject({ x: 100, y: 0 })
+    expect(containRect({ x: -40, y: 100, ...size }, 0, PAGE)).toMatchObject({ x: 0, y: 100 })
+    expect(containRect({ x: 100, y: 900, ...size }, 0, PAGE)).toMatchObject({ x: 100, y: 700 })
+    expect(containRect({ x: 700, y: 100, ...size }, 0, PAGE)).toMatchObject({ x: 400, y: 100 })
+  })
+
+  it('moves the shortest distance, not to a fixed margin', () => {
+    // 10 over the top edge means 10 back down, and nothing on the untouched axis.
+    const result = containRect({ x: 250, y: -10, width: 200, height: 100 }, 0, PAGE)
+    expect(result).toMatchObject({ x: 250, y: 0 })
+  })
+
+  it('keeps the size and rotation untouched', () => {
+    const result = containRect({ x: -40, y: -40, width: 200, height: 100 }, 30, PAGE)
+    expect(result.width).toBe(200)
+    expect(result.height).toBe(100)
+  })
+
+  it('contains the ROTATED bounding box, not just the rect', () => {
+    /*
+     * A rect flush against the top edge is inside; the same rect turned 45 deg is not,
+     * because its corners now reach above it. Clamping the rect alone would leave a
+     * corner of a rotated specimen poking off the page.
+     */
+    const flush = { x: 200, y: 0, width: 200, height: 100 }
+    expect(containRect(flush, 0, PAGE)).toBe(flush)
+
+    const turned = containRect(flush, 45, PAGE)
+    expect(turned).not.toBe(flush)
+    // Its centre has to drop to where the rotated half-height fits.
+    close(rectCenter(turned).y, 150 / Math.SQRT2)
+  })
+
+  it('centres a box larger than the page rather than returning NaN', () => {
+    // Reachable by resizing a stamp beyond the page, or on a very small page.
+    const huge = { x: -500, y: -500, width: 900, height: 1200 }
+    const result = containRect(huge, 0, PAGE)
+    expect(result.x).toBe(600 / 2 - 900 / 2)
+    expect(result.y).toBe(800 / 2 - 1200 / 2)
+    expect(Number.isNaN(result.x)).toBe(false)
+  })
+
+  it('is a no-op without usable bounds', () => {
+    const rect = { x: -100, y: -100, width: 50, height: 50 }
+    expect(containRect(rect, 0, undefined)).toBe(rect)
+    expect(containRect(rect, 0, { width: 0, height: 0 })).toBe(rect)
+  })
+})
+
+describe('clampRectInto', () => {
+  const size = { width: 200, height: 100 }
+  // A page in the middle of a document: sides bind, top and bottom do not.
+  const MIDDLE = { left: 0, right: 600, top: null, bottom: null }
+
+  it('returns the very same object when nothing needs to move', () => {
+    const rect = { x: 100, y: 100, ...size }
+    expect(clampRectInto(rect, 0, MIDDLE)).toBe(rect)
+  })
+
+  it('holds the sides on a middle page but lets it travel vertically', () => {
+    // This is what keeps dragging a stamp onto the next page working.
+    expect(clampRectInto({ x: -50, y: -9999, ...size }, 0, MIDDLE)).toMatchObject({
+      x: 0,
+      y: -9999,
+    })
+    expect(clampRectInto({ x: 700, y: 9999, ...size }, 0, MIDDLE)).toMatchObject({
+      x: 400,
+      y: 9999,
+    })
+  })
+
+  it('holds the top only on the first page', () => {
+    const first = { left: 0, right: 600, top: 0, bottom: null }
+    expect(clampRectInto({ x: 100, y: -80, ...size }, 0, first)).toMatchObject({ x: 100, y: 0 })
+    // Still free downwards: the document continues below.
+    const low = { x: 100, y: 5000, ...size }
+    expect(clampRectInto(low, 0, first)).toBe(low)
+  })
+
+  it('holds the bottom only on the last page', () => {
+    const last = { left: 0, right: 600, top: null, bottom: 800 }
+    expect(clampRectInto({ x: 100, y: 900, ...size }, 0, last)).toMatchObject({ x: 100, y: 700 })
+    const high = { x: 100, y: -5000, ...size }
+    expect(clampRectInto(high, 0, last)).toBe(high)
+  })
+
+  it('holds a rotated box by its corners', () => {
+    // Flush against the left edge unrotated; turned 45 deg its corners now reach past it.
+    const flush = { x: 0, y: 300, ...size }
+    expect(clampRectInto(flush, 0, MIDDLE)).toBe(flush)
+
+    const turned = clampRectInto(flush, 45, MIDDLE)
+    expect(turned).not.toBe(flush)
+    close(rectCenter(turned).x, 150 / Math.SQRT2)
+  })
+
+  it('centres a box too large for the space rather than favouring one side', () => {
+    const single = { left: 0, right: 600, top: 0, bottom: 800 }
+    const wide = { x: -100, y: 100, width: 900, height: 100 }
+    const result = clampRectInto(wide, 0, single)
+    close(rectCenter(result).x, 300)
+  })
+
+  it('is a no-op without limits', () => {
+    const rect = { x: -500, y: -500, ...size }
+    expect(clampRectInto(rect, 0, undefined)).toBe(rect)
+  })
+})
+
+describe('shrinkRectInto', () => {
+  const LIMITS = { left: 0, right: 600, top: 0, bottom: 800 }
+
+  /** The corner a resize holds still, as normalised coordinates. */
+  const anchorFor = (handle) => {
+    const { signX, signY } = handleSigns(handle)
+    return { x: signX === 1 ? 0 : 1, y: signY === 1 ? 0 : 1 }
+  }
+
+  it('returns the very same object when the rect already fits', () => {
+    const rect = { x: 100, y: 100, width: 200, height: 100 }
+    expect(shrinkRectInto({ rect, handle: 'se', limits: LIMITS })).toBe(rect)
+  })
+
+  it('gives back size rather than position', () => {
+    // Dragging the east handle past the right edge must stop the box growing, not slide
+    // it left — the anchor corner is under the user's expectation, and the cursor is on
+    // the edge they are pushing against.
+    const rect = { x: 400, y: 100, width: 400, height: 100 }
+    const result = shrinkRectInto({ rect, handle: 'e', limits: LIMITS })
+    expect(result.x).toBe(400)
+    expect(result.x + result.width).toBeCloseTo(600, 6)
+  })
+
+  it.each(['nw', 'ne', 'se', 'sw'])('keeps the %s anchor corner still', (handle) => {
+    const rect = { x: -100, y: -100, width: 900, height: 1000 }
+    const anchor = anchorFor(handle)
+    const before = pointOnRect(rect, anchor)
+    const after = pointOnRect(shrinkRectInto({ rect, handle, limits: LIMITS }), anchor)
+    close(after.x, before.x)
+    close(after.y, before.y)
+  })
+
+  it('brings the result inside the limits', () => {
+    const rect = { x: 100, y: 100, width: 900, height: 1200 }
+    const result = shrinkRectInto({ rect, handle: 'se', limits: LIMITS })
+    expect(result.x + result.width).toBeLessThanOrEqual(600 + 1e-6)
+    expect(result.y + result.height).toBeLessThanOrEqual(800 + 1e-6)
+  })
+
+  it('keeps the aspect ratio when locked', () => {
+    const rect = { x: 0, y: 0, width: 900, height: 300 }
+    const aspect = rect.width / rect.height
+    const result = shrinkRectInto({ rect, handle: 'se', limits: LIMITS, lockAspectRatio: true })
+    close(result.width / result.height, aspect)
+    expect(result.width).toBeLessThanOrEqual(600 + 1e-6)
+  })
+
+  it('lets the axes shrink independently when not locked', () => {
+    // A text box is not ratio-locked, so capping its width must not shorten it.
+    const rect = { x: 0, y: 100, width: 900, height: 200 }
+    const result = shrinkRectInto({ rect, handle: 'se', limits: LIMITS })
+    expect(result.height).toBe(200)
+    expect(result.width).toBeLessThan(900)
+  })
+
+  it('never shrinks below the minimum', () => {
+    const tight = { left: 0, right: 4, top: 0, bottom: 4 }
+    const rect = { x: 0, y: 0, width: 200, height: 200 }
+    const result = shrinkRectInto({ rect, handle: 'se', limits: tight })
+    expect(result.width).toBeGreaterThanOrEqual(MIN_BOX_SIZE)
+    expect(result.height).toBeGreaterThanOrEqual(MIN_BOX_SIZE)
+  })
+
+  it('ignores an unconstrained side', () => {
+    const rect = { x: 100, y: 100, width: 200, height: 5000 }
+    const open = { left: 0, right: 600, top: null, bottom: null }
+    expect(shrinkRectInto({ rect, handle: 'se', limits: open })).toBe(rect)
   })
 })

@@ -44,15 +44,27 @@ describe('resolveDropTarget', () => {
     expect(resolveDropTarget(rect(10, 640, 110, 730), root).pageIndex).toBe(0)
   })
 
-  it('returns null when dropped entirely in the gutter', () => {
+  /*
+   * These two used to expect null, and the caller then kept the annotation on the page it
+   * was dragged FROM — which is wrong as soon as a drag has travelled: a stamp dropped in
+   * the gutter before page 5 jumped back to page 1. Every drop now names a page, so the
+   * caller always has bounds to clamp against and nothing can be left off the document.
+   */
+  it('falls back to the nearest page when dropped in the gutter', () => {
     const root = makePages(PAGES)
-    expect(resolveDropTarget(rect(10, 702, 110, 718), root)).toBeNull()
+    // 702..718 sits in the 20px gutter, nearer page 0's centre than page 1's.
+    expect(resolveDropTarget(rect(10, 702, 110, 718), root).pageIndex).toBe(0)
+    // Just below the gutter's midpoint the nearer centre is page 1's.
+    expect(resolveDropTarget(rect(10, 1000, 110, 1016), root).pageIndex).toBe(1)
   })
 
-  it('returns null when dropped beside every page', () => {
+  it('falls back to the nearest page when dropped beside every page', () => {
     const root = makePages(PAGES)
-    expect(resolveDropTarget(rect(900, 10, 1000, 60), root)).toBeNull()
+    // Out in the margin at high zoom-out: level with page 0, so page 0 wins.
+    expect(resolveDropTarget(rect(900, 10, 1000, 60), root).pageIndex).toBe(0)
+    expect(resolveDropTarget(rect(900, 1300, 1000, 1350), root).pageIndex).toBe(1)
   })
+
 
   it('returns the page rect so the caller can rebase coordinates', () => {
     const root = makePages(PAGES)

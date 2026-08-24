@@ -55,6 +55,15 @@ export function TransformBox({
    */
   onTransformStart,
   onCommit,
+  /**
+   * Hold the object inside its allowed area *during* the gesture, rather than correcting
+   * it on release. Called as `(rect, rotation, kind, { handle, lockAspectRatio })` where
+   * `kind` is `'move'` or `'resize'`; returns the rect to paint.
+   *
+   * Given the same rect back, nothing changes — the caller decides what is out of bounds,
+   * so `TransformBox` stays free of any notion of pages.
+   */
+  constrainDraft,
   /** Flipped while a gesture is live, so the pinch handler knows to stand down. */
   isDraggingRef,
   children,
@@ -192,34 +201,50 @@ export function TransformBox({
         const angle = angleFromCenter(gesture.centre, { x: e.clientX, y: e.clientY })
         const raw = gesture.startRotation + (angle - gesture.startAngle)
         const next = e.shiftKey ? snapAngle(raw) : normalizeAngle(raw)
+        /*
+         * Deliberately not constrained. A rotation does not move the centre, so holding a
+         * rotating box inside its bounds could only be done by shrinking or shifting it
+         * mid-spin — which makes the gesture fight back just as the user is aiming. The
+         * commit-time clamp settles it on release instead.
+         */
         gesture.current = { rect: gesture.startRect, rotation: next }
       } else if (gesture.kind === 'resize') {
         // Undo the page rotation and then the object's own, so the delta is expressed
         // in the axes the handle actually moves along.
         const localDelta = toLocalDelta(screenDelta, frameRotation + gesture.startRotation)
+        const resized = resizeRect({
+          rect: gesture.startRect,
+          rotation: gesture.startRotation,
+          handle: gesture.handle,
+          delta: localDelta,
+          lockAspectRatio,
+        })
         gesture.current = {
-          rect: resizeRect({
-            rect: gesture.startRect,
-            rotation: gesture.startRotation,
-            handle: gesture.handle,
-            delta: localDelta,
-            lockAspectRatio,
-          }),
+          // Over-large resizes give back size, not position, so the anchor corner and
+          // the handle under the cursor both stay put.
+          rect:
+            constrainDraft?.(resized, gesture.startRotation, 'resize', {
+              handle: gesture.handle,
+              lockAspectRatio,
+            }) ?? resized,
           rotation: gesture.startRotation,
         }
       } else {
         // Translation only needs the page rotation undone; the object's own rotation
         // does not affect which way "right" is for a move.
         const frameDelta = toLocalDelta(screenDelta, frameRotation)
+        const moved = moveRect(gesture.startRect, frameDelta)
         gesture.current = {
-          rect: moveRect(gesture.startRect, frameDelta),
+          rect: constrainDraft?.(moved, gesture.startRotation, 'move') ?? moved,
           rotation: gesture.startRotation,
         }
       }
 
+      // `gesture.current` holds the constrained rect, so what is committed on release is
+      // exactly what was last painted — otherwise the box would jump as the pointer lifts.
       paint(gesture.current.rect, gesture.current.rotation)
     },
-    [frameRotation, lockAspectRatio, paint]
+    [frameRotation, lockAspectRatio, paint, constrainDraft]
   )
 
   const endGesture = useCallback(
@@ -264,6 +289,17 @@ export function TransformBox({
         height: rect.height,
         transform: `rotate(${rotation}deg)`,
       }}
+      /*
+        Read by Page.module.css as `.page:has([data-transforming])`, which lifts the
+        page's `overflow: hidden` for the duration of the gesture so a stamp carried
+        towards the next page is not sliced off at the boundary.
+
+        A data attribute rather than a class because the two live in different CSS
+        modules: their class names are hashed separately, so `:has(.boxTransforming)`
+        could never match. `undefined` rather than `false` keeps the attribute off the
+        element entirely when idle.
+      */
+      data-transforming={isTransforming ? 'true' : undefined}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={endGesture}
