@@ -1,5 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import { resolvedWorkerUrl } from './workerUrl.js'
+import {
+  resolvedWorkerUrl,
+  resolvedWasmUrl,
+  resolvedStandardFontDataUrl,
+} from './workerUrl.js'
 
 /**
  * pdf.js needs a worker before any document can be opened, and that worker is a separate
@@ -35,12 +39,14 @@ let warned = false
 const OPTIMIZED_DEPS_DIR = '/.vite/deps/'
 const PACKAGE_DIST = '/@armsolusi/pdf-viewer/dist/'
 const WORKER_FILE = 'pdf.worker.min.js'
+const WASM_DIR = 'wasm/'
+const FONTS_DIR = 'standard_fonts/'
 
 /**
  * Undo the relocation Vite's dev server performs on pre-bundled dependencies.
  *
  * In dev, Vite rewrites this package into `node_modules/.vite/deps/`, which moves
- * `import.meta.url` out of the package — and it does not copy the worker along. The
+ * `import.meta.url` out of the package — and it does not copy our assets along. The
  * relative path then 404s and pdf.js reports the opaque "Setting up fake worker failed".
  * Production builds never hit this: there the bundler rewrites the expression into a real
  * emitted asset, verified against both Vite and webpack.
@@ -50,15 +56,61 @@ const WORKER_FILE = 'pdf.worker.min.js'
  * `optimizeDeps.exclude`. A layout this does not anticipate falls through unchanged and
  * is explained by describeWorkerFailure() below.
  *
+ * Takes the asset's name because there are three of them now — the worker, and the
+ * directories holding the image decoders and the standard fonts. The worker was the only
+ * one for long enough that this was written around it; the decoders relocate just the same,
+ * and their failure is quieter, so hard-coding one name here would have hidden it.
+ *
  * @param {string} url
+ * @param {string} [name] file or directory the URL should end in
  */
-export function correctOptimizedDepUrl(url) {
-  const marker = `${OPTIMIZED_DEPS_DIR}${WORKER_FILE}`
+export function correctOptimizedDepUrl(url, name = WORKER_FILE) {
+  const marker = `${OPTIMIZED_DEPS_DIR}${name}`
   if (!url?.includes(marker)) return url
-  return url.replace(marker, `${PACKAGE_DIST}${WORKER_FILE}`)
+  return url.replace(marker, `${PACKAGE_DIST}${name}`)
 }
 
 const bundledWorkerUrl = correctOptimizedDepUrl(resolvedWorkerUrl)
+
+/**
+ * Where pdf.js should fetch its image decoders and standard font data.
+ *
+ * Both default to the copies shipped in this package; a host serving its own passes
+ * `config.wasmUrl` or `config.standardFontDataUrl`, matching how `config.workerSrc` works.
+ *
+ * These are not a nicety. pdf.js v6 decodes CCITT, JBIG2 and JPEG 2000 in WebAssembly and
+ * has no default location for it, and an image whose decoder never starts is not skipped —
+ * a stencil mask gets painted in full, so a scanned logo becomes a solid black rectangle
+ * while the rest of the page renders perfectly.
+ *
+ * @param {{wasmUrl?: string, standardFontDataUrl?: string}} [options]
+ */
+export function resolveAssetUrls({ wasmUrl, standardFontDataUrl } = {}) {
+  return {
+    wasmUrl: asDirectory(wasmUrl ?? correctOptimizedDepUrl(resolvedWasmUrl, WASM_DIR)),
+    standardFontDataUrl: asDirectory(
+      standardFontDataUrl ?? correctOptimizedDepUrl(resolvedStandardFontDataUrl, FONTS_DIR)
+    ),
+  }
+}
+
+/**
+ * Guarantee the trailing slash pdf.js assumes.
+ *
+ * It builds every request as `${wasmUrl}${filename}` with no separator, so a directory URL
+ * without a slash asks for `…/wasmjbig2.wasm` and 404s — which surfaces not as a missing
+ * image but as a black rectangle, since a stencil mask that cannot be decoded is painted
+ * in full.
+ *
+ * Written in `workerUrl.js` with the slash, and it still cannot be relied on: Vite rewrites
+ * `new URL('./wasm/', import.meta.url)` into an asset URL and normalises the slash away.
+ * A host passing its own directory is just as likely to leave it off. Cheaper to be certain
+ * here than to depend on either.
+ */
+function asDirectory(url) {
+  if (!url) return url
+  return url.endsWith('/') ? url : `${url}/`
+}
 
 /**
  * Point pdf.js at a worker. Safe to call on every render — assignment is idempotent

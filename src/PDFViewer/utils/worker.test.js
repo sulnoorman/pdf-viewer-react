@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { readFile, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import * as pdfjsLib from 'pdfjs-dist'
-import { configureWorker, describeWorkerFailure, correctOptimizedDepUrl } from './worker.js'
+import {
+  configureWorker,
+  describeWorkerFailure,
+  correctOptimizedDepUrl,
+  resolveAssetUrls,
+} from './worker.js'
 
 describe('configureWorker', () => {
   let warn
@@ -102,11 +107,27 @@ describe('the bundled worker URL', () => {
     expect(code).not.toContain('pdfjs-dist')
   })
 
-  it('holds no logic of its own, being the one untested module', async () => {
-    // It is external to the bundle and cannot be unit-tested, so anything it got wrong
-    // would only surface in a consumer's app. One expression, no branches.
+  it('resolves the decoder and font directories the same way, with trailing slashes', async () => {
+    // Same mechanism, same constraint — and the slash is not cosmetic: pdf.js appends the
+    // filename directly to these.
     const code = await readWorkerUrlCode()
-    expect(code.split('\n')).toHaveLength(1)
+    expect(code).toContain("new URL('./wasm/', import.meta.url)")
+    expect(code).toContain("new URL('./standard_fonts/', import.meta.url)")
+  })
+
+  it('holds no logic of its own, being the one untested module', async () => {
+    /*
+     * It is external to the bundle and cannot be unit-tested, so anything it got wrong
+     * would only surface in a consumer's app. Every line is one export of one URL
+     * expression — no branches, no conditionals, nothing that could behave differently
+     * there than here. Correcting these URLs belongs in worker.js, which is tested.
+     */
+    const code = await readWorkerUrlCode()
+    const lines = code.split('\n')
+    expect(lines.length).toBeGreaterThan(0)
+    for (const line of lines) {
+      expect(line).toMatch(/^export const \w+ = new URL\('\.\/[\w./-]+', import\.meta\.url\)\.href$/)
+    }
   })
 })
 
@@ -145,6 +166,72 @@ describe('correctOptimizedDepUrl', () => {
 
   it('survives a missing URL', () => {
     expect(correctOptimizedDepUrl(undefined)).toBeUndefined()
+  })
+
+  it('relocates the decoder and font directories too, not just the worker', () => {
+    /*
+     * The worker was the only relocated asset for long enough that this function was
+     * written around its filename. pdf.js v6 also fetches its image decoders and standard
+     * fonts at runtime, and Vite's optimizer moves those URLs exactly the same way — but
+     * their failure is quieter: a CCITT stencil whose decoder never loads is not skipped,
+     * it is painted in full, so a scanned logo becomes a solid black rectangle.
+     */
+    const base = 'http://localhost:5173/node_modules/'
+    expect(correctOptimizedDepUrl(`${base}.vite/deps/wasm/`, 'wasm/')).toBe(
+      `${base}@armsolusi/pdf-viewer/dist/wasm/`
+    )
+    expect(correctOptimizedDepUrl(`${base}.vite/deps/standard_fonts/`, 'standard_fonts/')).toBe(
+      `${base}@armsolusi/pdf-viewer/dist/standard_fonts/`
+    )
+  })
+})
+
+describe('resolveAssetUrls', () => {
+  it('ends both defaults in a slash, whatever the bundler did to them', () => {
+    /*
+     * Load-bearing, not tidiness: pdf.js builds the request as `${wasmUrl}${filename}`
+     * with no separator. This is how the original defect announced itself — with nothing
+     * configured at all, the concatenation produced the literal
+     * `nulljbig2_nowasm_fallback.js`.
+     *
+     * And the slash written in workerUrl.js does not survive: Vite rewrites
+     * `new URL('./wasm/', import.meta.url)` into an asset URL with the slash normalised
+     * away. This test caught exactly that, so it is a regression guard, not a formality.
+     */
+    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls()
+    expect(wasmUrl.endsWith('/')).toBe(true)
+    expect(standardFontDataUrl.endsWith('/')).toBe(true)
+  })
+
+  it('adds the slash a host left off', () => {
+    expect(resolveAssetUrls({ wasmUrl: 'https://cdn.example.com/wasm' }).wasmUrl).toBe(
+      'https://cdn.example.com/wasm/'
+    )
+  })
+
+  it('points at the directories the build actually fills', () => {
+    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls()
+    expect(wasmUrl).toMatch(/wasm\/$/)
+    expect(standardFontDataUrl).toMatch(/standard_fonts\/$/)
+  })
+
+  it('lets a host serving its own copies win', () => {
+    // Same precedence as config.workerSrc.
+    expect(
+      resolveAssetUrls({
+        wasmUrl: 'https://cdn.example.com/pdfjs/wasm/',
+        standardFontDataUrl: 'https://cdn.example.com/pdfjs/fonts/',
+      })
+    ).toEqual({
+      wasmUrl: 'https://cdn.example.com/pdfjs/wasm/',
+      standardFontDataUrl: 'https://cdn.example.com/pdfjs/fonts/',
+    })
+  })
+
+  it('falls back per option, not all or nothing', () => {
+    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls({ wasmUrl: '/my/wasm/' })
+    expect(wasmUrl).toBe('/my/wasm/')
+    expect(standardFontDataUrl).toMatch(/standard_fonts\/$/)
   })
 })
 

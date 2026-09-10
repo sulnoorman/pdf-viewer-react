@@ -1,6 +1,6 @@
 import { useEffect, useReducer, useCallback, useMemo, useRef } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
-import { configureWorker, describeWorkerFailure } from '../utils/worker.js'
+import { configureWorker, describeWorkerFailure, resolveAssetUrls } from '../utils/worker.js'
 import { normalizeRotation } from '../utils/coords.js'
 import { normalizePdfSource, copyBytes, sourceKey } from '../utils/source.js'
 import { useLatestRef } from './useLatestRef.js'
@@ -161,7 +161,14 @@ function cacheReducer(state, action) {
  */
 export function usePdfDocument(
   src,
-  { workerSrc, workerPort, cacheSize = DEFAULT_DOCUMENT_CACHE_SIZE, onLoadError } = {}
+  {
+    workerSrc,
+    workerPort,
+    wasmUrl,
+    standardFontDataUrl,
+    cacheSize = DEFAULT_DOCUMENT_CACHE_SIZE,
+    onLoadError,
+  } = {}
 ) {
   const [cache, dispatch] = useReducer(cacheReducer, EMPTY_CACHE)
   const [reloadToken, bumpReloadToken] = useReducer((n) => n + 1, 0)
@@ -281,6 +288,13 @@ export function usePdfDocument(
         loadingTask = pdfjsLib.getDocument({
           data: copyBytes(sourceBytes),
           ...(workerRef.current ? { worker: workerRef.current } : {}),
+          /*
+           * Where to fetch the image decoders and standard font data. Both have to be given
+           * per document — unlike the worker, pdf.js exposes no global for them, and has no
+           * default: an unset `wasmUrl` is concatenated with the filename as the string
+           * "null", which is how this surfaced as `Cannot find package 'nulljbig2…'`.
+           */
+          ...resolveAssetUrls({ wasmUrl, standardFontDataUrl }),
         })
         doc = await loadingTask.promise
         if (cancelled) return
@@ -331,7 +345,17 @@ export function usePdfDocument(
     // `cache.documents` is deliberately absent: this must run when the document being
     // asked for changes, not every time the cache is reordered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, src, workerSrc, workerPort, cacheSize, reloadToken, onLoadErrorRef])
+  }, [
+    key,
+    src,
+    workerSrc,
+    workerPort,
+    wasmUrl,
+    standardFontDataUrl,
+    cacheSize,
+    reloadToken,
+    onLoadErrorRef,
+  ])
 
   /** Remember where the reader was, so returning to a document lands there. */
   const rememberScroll = useCallback(

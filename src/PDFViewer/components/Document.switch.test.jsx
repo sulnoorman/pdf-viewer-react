@@ -32,6 +32,11 @@ vi.mock('pdfjs-dist', () => ({
 vi.mock('../utils/worker.js', () => ({
   configureWorker: () => {},
   describeWorkerFailure: (err) => err.message,
+  // Reads import.meta.url for real; only its shape matters here. See worker.test.js.
+  resolveAssetUrls: () => ({
+    wasmUrl: '/bundled/wasm/',
+    standardFontDataUrl: '/bundled/standard_fonts/',
+  }),
 }))
 vi.mock('../utils/source.js', () => ({
   // Encodes the src itself, so the two documents are distinguishable downstream. Keying on

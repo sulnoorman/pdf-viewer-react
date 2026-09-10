@@ -93,6 +93,12 @@ const SPECIMEN = `${import.meta.env.BASE_URL}Tandatangan.png`
 const ATTACHMENTS = [
   { id: 'lampiran-1', label: 'Lampiran 1', url: '/signed-document.pdf' },
   { id: 'lampiran-2', label: 'Lampiran 2', url: '/sample.pdf' },
+  /*
+   * A scan, kept here on purpose. Its emblem is a 1-bit CCITT stencil mask — the format
+   * that rendered as a solid black square until the package started shipping pdf.js's
+   * wasm decoders. Nothing in the test suite can see that, so this is the check.
+   */
+  { id: 'lampiran-3', label: 'Lampiran 3 (scan)', url: '/uu-1988-scan.pdf' },
 ]
 
 export default function App() {

@@ -98,6 +98,22 @@ jobs:
         run: |
           size=$(stat -c%s dist/pdf-viewer.js)
           echo "dist/pdf-viewer.js is $size bytes"
-          test "$size" -lt 200000 || { echo "Bundle far larger than expected — worker inlined?"; exit 1; }
+          test "$size" -lt 200000 || { echo "Bundle far larger than expected — asset inlined?"; exit 1; }
           test -f dist/pdf.worker.min.js || { echo "Bundled worker missing from dist/"; exit 1; }
           test ! -d dist/assets || { echo "dist/assets/ should not exist — duplicate worker?"; exit 1; }
+
+      # pdf.js fetches these at runtime and has no default location for them. Missing, it
+      # does not report an error: a CCITT or JBIG2 stencil that cannot be decoded is painted
+      # in full, so a scanned logo renders as a solid black rectangle on an otherwise perfect
+      # page. Nothing in the test suite can see that, so the files are checked here.
+      - name: Guard the pdf.js runtime assets
+        run: |
+          for f in jbig2.wasm openjpeg.wasm qcms_bg.wasm; do
+            test -f "dist/wasm/$f" || { echo "dist/wasm/$f missing — scanned images will render black"; exit 1; }
+          done
+          # Redistributing the binaries obliges us to redistribute their licences.
+          for f in LICENSE_JBIG2 LICENSE_OPENJPEG LICENSE_QCMS; do
+            test -f "dist/wasm/$f" || { echo "dist/wasm/$f missing — required to redistribute the binary"; exit 1; }
+          done
+          test -n "$(ls -A dist/standard_fonts 2>/dev/null)" || { echo "dist/standard_fonts/ empty — unembedded standard fonts will be substituted"; exit 1; }
+          echo "wasm $(du -sh dist/wasm | cut -f1), fonts $(du -sh dist/standard_fonts | cut -f1)"

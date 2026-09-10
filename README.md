@@ -86,10 +86,35 @@ The viewer fills its container, so give the parent a height.
 yours to implement, which is what makes uploading the signed document just as natural as
 downloading it.
 
-## The pdf.js worker
+## What pdf.js fetches at runtime
 
-**There is nothing to configure.** pdf.js parses documents in a Web Worker, and that
-worker ships inside this package; your bundler emits it as a separate file on its own.
+**There is nothing to configure.** pdf.js is not self-contained — it loads a worker, its
+image decoders, and standard font data at runtime, and leaves finding them to whoever
+embeds it. All of it ships inside this package, and your bundler emits each as its own
+file.
+
+That division is why a document can render correctly in a browser's built-in PDF viewer
+and incorrectly in an embedded one: the browser ships the whole set. The failure is not
+loud, either. An image whose decoder never loads is not skipped — a 1-bit stencil mask,
+which is what scanners produce, gets painted in full, so a logo becomes a solid black
+rectangle on a page that is otherwise perfect.
+
+| | Fetched by |
+| --- | --- |
+| `pdf.worker.min.js`, 1.2 MB | every document |
+| `wasm/jbig2.wasm`, 102 kB | CCITT and JBIG2 images — scanner output |
+| `wasm/openjpeg.wasm`, 246 kB | JPEG 2000 images |
+| `wasm/qcms_bg.wasm`, 87 kB | documents with ICC colour profiles |
+| `standard_fonts/`, 762 kB | documents using a standard font without embedding it |
+
+None of it enters your application bundle, and nothing is fetched by a document that does
+not need it. Override any of them with `config.workerSrc`, `config.wasmUrl` or
+`config.standardFontDataUrl` to serve your own copies.
+
+### The worker
+
+pdf.js parses documents in a Web Worker, and that worker ships inside this package; your
+bundler emits it as a separate file on its own.
 
 That is worth a note because it is unusual, and because it constrains one thing. There is
 no portable way for a library to ask a bundler for the URL of a file inside a
@@ -261,6 +286,8 @@ depend on a URL still being reachable.
 | --- | --- | --- | --- |
 | `workerSrc` | `string` | bundled | Override the worker URL; the package ships one |
 | `workerPort` | `Worker` | — | A Worker you built yourself; wins over `workerSrc` |
+| `wasmUrl` | `string` | bundled | Directory holding pdf.js's image decoders |
+| `standardFontDataUrl` | `string` | bundled | Directory holding the standard font data |
 | `documentCacheSize` | `number` | `3` | How many documents stay parsed in memory, so returning to one is instant. `0` switches it off |
 | `specimenAsset` | `string` | — | The signature image; the only thing `hasSpecimen` counts |
 | `stampAssets` | `Record<string, string \| StampAsset> \| StampAsset[]` | — | Several stamp images |

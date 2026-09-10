@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+## 0.1.6
+
+### Fixed
+
+- **A scanned logo rendered as a solid black square.** Reported against a government
+  document whose emblem is a 1-bit CCITT stencil mask; the same file renders correctly in a
+  browser's built-in viewer, which is what made it look like our defect.
+
+  It was not our rendering code — the fault reproduces in a bare Node harness with
+  `pdfjs-dist` and one `page.render()`. pdf.js v6 moved CCITT, JBIG2 and JPEG 2000 decoding
+  out of JavaScript and into WebAssembly, fetched at runtime from a `wasmUrl` the embedder
+  supplies. There is no default, and we never set one, so the decoder never started.
+
+  What made it look like a rendering bug rather than a missing file: **a stencil mask that
+  fails to decode is not a missing image.** With no `Decode` array a sample value of zero
+  means *paint*, so the mask paints its whole rectangle in the current fill colour. Nothing
+  throws, the page count is right, the layout is right, and one image is a black rectangle.
+
+  The error also named the wrong format — `Jbig2Error` on a document containing no JBIG2 —
+  because CCITT and JBIG2 are one binary: `jbig2.wasm` exports `_ccitt_decode` alongside
+  `_jbig2_decode`.
+
+  The package now ships `jbig2.wasm`, `openjpeg.wasm` and `qcms_bg.wasm` (and their
+  licences), plus the standard font data, resolved the same way the worker already was —
+  through the one module kept external so `import.meta.url` survives to the consumer's
+  bundler. `config.wasmUrl` and `config.standardFontDataUrl` override them, matching
+  `config.workerSrc`.
+
+  **The tarball grows from 0.4 MB to 1.1 MB**, all of it these assets. Nothing enters your
+  application bundle: each file is fetched only by a document that needs it, and most
+  documents need none of them. `quickjs-eval.wasm` (458 kB, for running JavaScript embedded
+  in PDF forms) and the no-wasm JavaScript fallbacks (583 kB) are deliberately left out.
+
+  Also fixed by the same change, quietly: JPEG 2000 images, ICC colour profiles, and
+  documents that reference a standard font without embedding it — the last of which
+  substituted metrics and shifted the layout.
+
+  One trap worth recording. The URLs are written with a trailing slash, and **that slash
+  does not survive**: Vite rewrites `new URL('./wasm/', import.meta.url)` into an asset URL
+  and normalises it away. pdf.js concatenates `wasmUrl + filename` with no separator, so
+  losing it asks for `wasmjbig2.wasm`. It is now forced at the point of use rather than
+  trusted, and a test pins it.
+
 ## 0.1.5
 
 ### Added

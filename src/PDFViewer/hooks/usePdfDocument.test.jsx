@@ -42,6 +42,13 @@ vi.mock('pdfjs-dist', () => ({
 vi.mock('../utils/worker.js', () => ({
   configureWorker: () => {},
   describeWorkerFailure: (err) => err.message,
+  // Stands in for the real resolver, which reads import.meta.url. Only the shape matters
+  // here — that the hook forwards these to getDocument at all; worker.test.js covers how
+  // they are built and the trailing slash they must carry.
+  resolveAssetUrls: ({ wasmUrl, standardFontDataUrl } = {}) => ({
+    wasmUrl: wasmUrl ?? '/bundled/wasm/',
+    standardFontDataUrl: standardFontDataUrl ?? '/bundled/standard_fonts/',
+  }),
 }))
 vi.mock('../utils/source.js', () => ({
   // The identity of `src` is the key, exactly as sourceKey() documents, so a string is
@@ -535,6 +542,42 @@ describe('the worker', () => {
 
     expect(workers).toHaveLength(1)
     expect(workers[0].promiseHandled).toBe(true)
+  })
+
+  it('tells pdf.js where its image decoders and fonts are', async () => {
+    /*
+     * pdf.js v6 decodes CCITT, JBIG2 and JPEG 2000 in WebAssembly, fetched at runtime from
+     * `wasmUrl` — and there is no default. Unset, the decoder never starts, and a stencil
+     * mask that fails to decode is not skipped: it is painted in full, so a scanned logo
+     * comes out as a solid black rectangle with the rest of the page perfectly intact.
+     *
+     * Nothing throws and nothing rejects, which is why this is asserted on the call rather
+     * than left to be noticed.
+     */
+    const doc = deferredDoc()
+    serve(doc)
+
+    const d = driver()
+    await d.open('a.pdf', doc.release)
+
+    const [params] = getDocument.mock.calls[0]
+    expect(params.wasmUrl).toMatch(/wasm\/$/)
+    expect(params.standardFontDataUrl).toMatch(/standard_fonts\/$/)
+  })
+
+  it('lets the host point at its own copies', async () => {
+    const doc = deferredDoc()
+    serve(doc)
+
+    const d = driver({
+      wasmUrl: 'https://cdn.example.com/wasm/',
+      standardFontDataUrl: 'https://cdn.example.com/fonts/',
+    })
+    await d.open('a.pdf', doc.release)
+
+    const [params] = getDocument.mock.calls[0]
+    expect(params.wasmUrl).toBe('https://cdn.example.com/wasm/')
+    expect(params.standardFontDataUrl).toBe('https://cdn.example.com/fonts/')
   })
 
   it('leaves a host-supplied port alone', async () => {

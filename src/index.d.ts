@@ -230,6 +230,29 @@ export interface PDFViewerConfig {
   workerPort?: Worker
 
   /**
+   * Where pdf.js fetches its image decoders, as a directory URL.
+   *
+   * Optional: the package ships them and wires this up, so there is normally nothing to
+   * set. Pass it to serve your own copies of `jbig2.wasm`, `openjpeg.wasm` and
+   * `qcms_bg.wasm` — from a CDN, say.
+   *
+   * These decode CCITT, JBIG2 and JPEG 2000, which is to say scanner output. Point this
+   * somewhere that does not have them and images do not go missing, they turn into solid
+   * black rectangles: a stencil mask that cannot be decoded gets painted in full.
+   *
+   * A trailing slash is added if you leave it off.
+   */
+  wasmUrl?: string
+  /**
+   * Where pdf.js fetches the standard font data, as a directory URL.
+   *
+   * Optional, and shipped with the package like `wasmUrl`. Only documents that reference
+   * one of the 14 standard fonts without embedding it fetch anything from here; without
+   * it their metrics are substituted and the layout shifts.
+   */
+  standardFontDataUrl?: string
+
+  /**
    * How many documents to keep parsed in memory. Defaults to 3; `0` switches it off.
    *
    * Only matters when one viewer shows several documents in turn — see `documentId`.

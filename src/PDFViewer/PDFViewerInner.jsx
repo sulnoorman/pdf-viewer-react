@@ -101,6 +101,16 @@ export function PDFViewerInner({ src, documentId, config = {}, viewerRef, viewer
     workerSrc,
     workerPort,
     /**
+     * Where pdf.js fetches its image decoders and standard font data. Both ship with this
+     * package and are wired up automatically; these exist for a host serving its own
+     * copies, exactly as `workerSrc` does.
+     *
+     * A directory URL, and it **must end in a slash** — pdf.js appends the filename with no
+     * separator.
+     */
+    wasmUrl,
+    standardFontDataUrl,
+    /**
      * How many documents to keep parsed in memory, so returning to one a host has already
      * shown is instant rather than a fresh load. Only matters when one viewer cycles
      * through several documents; `0` switches it off.
@@ -145,6 +155,8 @@ export function PDFViewerInner({ src, documentId, config = {}, viewerRef, viewer
   } = usePdfDocument(src, {
     workerSrc,
     workerPort,
+    wasmUrl,
+    standardFontDataUrl,
     cacheSize: documentCacheSize,
     onLoadError,
   })
