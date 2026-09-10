@@ -7,6 +7,7 @@ import {
   describeWorkerFailure,
   correctOptimizedDepUrl,
   resolveAssetUrls,
+  bundledDirectory,
 } from './worker.js'
 
 describe('configureWorker', () => {
@@ -206,6 +207,40 @@ describe('resolveAssetUrls', () => {
   it('adds the slash a host left off', () => {
     expect(resolveAssetUrls({ wasmUrl: 'https://cdn.example.com/wasm' }).wasmUrl).toBe(
       'https://cdn.example.com/wasm/'
+    )
+  })
+
+  it('restores the slash before correcting the path, not after', () => {
+    /*
+     * The order is the bug, and it shipped. Reported from an app served under
+     * /service/dokumen-lain, where the logo stayed black on 0.1.6:
+     *
+     *   GET .../node_modules/.vite/deps/wasm/jbig2.wasm   304, 617 B of index.html
+     *
+     * `workerUrl.js` writes the slash; Vite rewrites the expression and normalises it
+     * away. Correcting first looked for `/.vite/deps/wasm/` in a string reading
+     * `/.vite/deps/wasm`, missed, and left the optimizer's path — then the slash was
+     * appended to *that*, naming a directory which has never existed.
+     *
+     * Written against the real URL rather than a tidy one, so it fails the way the
+     * browser did.
+     */
+    const fromOptimizer =
+      'http://localhost:5173/service/dokumen-lain/node_modules/.vite/deps/wasm'
+
+    expect(bundledDirectory(fromOptimizer, 'wasm/')).toBe(
+      'http://localhost:5173/service/dokumen-lain/node_modules/@armsolusi/pdf-viewer/dist/wasm/'
+    )
+
+    // And the shape that misled: correcting the un-slashed URL does nothing at all.
+    expect(correctOptimizedDepUrl(fromOptimizer, 'wasm/')).toBe(fromOptimizer)
+  })
+
+  it('handles the slashed form too, since which one arrives is the bundler’s choice', () => {
+    const slashed =
+      'http://localhost:5173/service/dokumen-lain/node_modules/.vite/deps/standard_fonts/'
+    expect(bundledDirectory(slashed, 'standard_fonts/')).toBe(
+      'http://localhost:5173/service/dokumen-lain/node_modules/@armsolusi/pdf-viewer/dist/standard_fonts/'
     )
   })
 

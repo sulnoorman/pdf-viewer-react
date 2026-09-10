@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.1.7
+
+### Fixed
+
+- **The decoder URLs were corrected in the wrong order, so under Vite's dep optimizer they
+  were not corrected at all.** `0.1.6` shipped the wasm decoders but a consumer could still
+  see a scanned logo render black.
+
+  `workerUrl.js` writes `new URL('./wasm/', import.meta.url)` with a trailing slash, and
+  Vite rewrites that expression into an asset URL with the slash normalised away. The fix
+  for the dev optimizer then looked for `/.vite/deps/wasm/` in a string that read
+  `/.vite/deps/wasm`, found nothing, and left the optimizer's path in place — after which
+  the slash was appended to *that*, naming a directory which has never existed. pdf.js
+  asked for `…/.vite/deps/wasm/jbig2.wasm`, the dev server answered with `index.html`, and
+  the stencil mask was painted black exactly as before.
+
+  The slash is now restored before the path is corrected rather than after. Both orders
+  look equally reasonable reading the code, which is why the test pins the URL a real
+  application reported rather than a tidied-up one.
+
 ## 0.1.6
 
 ### Fixed

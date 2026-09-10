@@ -87,11 +87,32 @@ const bundledWorkerUrl = correctOptimizedDepUrl(resolvedWorkerUrl)
  */
 export function resolveAssetUrls({ wasmUrl, standardFontDataUrl } = {}) {
   return {
-    wasmUrl: asDirectory(wasmUrl ?? correctOptimizedDepUrl(resolvedWasmUrl, WASM_DIR)),
-    standardFontDataUrl: asDirectory(
-      standardFontDataUrl ?? correctOptimizedDepUrl(resolvedStandardFontDataUrl, FONTS_DIR)
-    ),
+    wasmUrl: wasmUrl ? asDirectory(wasmUrl) : bundledDirectory(resolvedWasmUrl, WASM_DIR),
+    standardFontDataUrl: standardFontDataUrl
+      ? asDirectory(standardFontDataUrl)
+      : bundledDirectory(resolvedStandardFontDataUrl, FONTS_DIR),
   }
+}
+
+/**
+ * A directory shipped in this package, corrected for Vite's dep optimizer.
+ *
+ * **The slash is restored before the correction, not after**, and that order is the whole
+ * point of this function existing separately.
+ *
+ * `workerUrl.js` writes `new URL('./wasm/', import.meta.url)` with the slash, and Vite
+ * rewrites that expression into an asset URL with the slash normalised away. Correcting
+ * first therefore looked for `/.vite/deps/wasm/` in a string that read `/.vite/deps/wasm`,
+ * missed, and left the optimizer's path in place — the slash was then appended to it,
+ * producing a URL under `.vite/deps/` that has never existed. pdf.js asked for
+ * `…/.vite/deps/wasm/jbig2.wasm`, got the dev server's index.html, and painted the stencil
+ * mask black.
+ *
+ * @param {string} url
+ * @param {string} name the directory, with its trailing slash
+ */
+export function bundledDirectory(url, name) {
+  return correctOptimizedDepUrl(asDirectory(url), name)
 }
 
 /**
