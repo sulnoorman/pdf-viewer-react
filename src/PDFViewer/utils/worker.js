@@ -1,9 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
-import {
-  resolvedWorkerUrl,
-  resolvedWasmUrl,
-  resolvedStandardFontDataUrl,
-} from './workerUrl.js'
+import { resolvedWorkerUrl } from './workerUrl.js'
 
 /**
  * pdf.js needs a worker before any document can be opened, and that worker is a separate
@@ -39,8 +35,6 @@ let warned = false
 const OPTIMIZED_DEPS_DIR = '/.vite/deps/'
 const PACKAGE_DIST = '/@armsolusi/pdf-viewer/dist/'
 const WORKER_FILE = 'pdf.worker.min.js'
-const WASM_DIR = 'wasm/'
-const FONTS_DIR = 'standard_fonts/'
 
 /**
  * Undo the relocation Vite's dev server performs on pre-bundled dependencies.
@@ -73,63 +67,29 @@ export function correctOptimizedDepUrl(url, name = WORKER_FILE) {
 const bundledWorkerUrl = correctOptimizedDepUrl(resolvedWorkerUrl)
 
 /**
- * Where pdf.js should fetch its image decoders and standard font data.
+ * Normalise the directory URLs a host may supply for its own copies.
  *
- * Both default to the copies shipped in this package; a host serving its own passes
- * `config.wasmUrl` or `config.standardFontDataUrl`, matching how `config.workerSrc` works.
+ * Only host values pass through here. The package's own assets are resolved per file by
+ * utils/binaryData.js, because a bundler renames what it emits and a base directory plus a
+ * bare filename cannot survive that.
  *
- * These are not a nicety. pdf.js v6 decodes CCITT, JBIG2 and JPEG 2000 in WebAssembly and
- * has no default location for it, and an image whose decoder never starts is not skipped —
- * a stencil mask gets painted in full, so a scanned logo becomes a solid black rectangle
- * while the rest of the page renders perfectly.
+ * The trailing slash is not cosmetic: pdf.js concatenates `${wasmUrl}${filename}` with no
+ * separator, and `getFactoryUrlProp` rejects a URL without one outright.
  *
  * @param {{wasmUrl?: string, standardFontDataUrl?: string}} [options]
  */
-export function resolveAssetUrls({ wasmUrl, standardFontDataUrl } = {}) {
+export function resolveAssetUrls({ wasmUrl, standardFontDataUrl, cMapUrl } = {}) {
   return {
-    wasmUrl: wasmUrl ? asDirectory(wasmUrl) : bundledDirectory(resolvedWasmUrl, WASM_DIR),
-    standardFontDataUrl: standardFontDataUrl
-      ? asDirectory(standardFontDataUrl)
-      : bundledDirectory(resolvedStandardFontDataUrl, FONTS_DIR),
+    ...(wasmUrl ? { wasmUrl: asDirectory(wasmUrl) } : {}),
+    ...(standardFontDataUrl ? { standardFontDataUrl: asDirectory(standardFontDataUrl) } : {}),
+    // Not shipped with the package — CMaps are another 1.5 MB and only documents using
+    // predefined CJK encodings need them, so this one is host-only.
+    ...(cMapUrl ? { cMapUrl: asDirectory(cMapUrl) } : {}),
   }
 }
 
-/**
- * A directory shipped in this package, corrected for Vite's dep optimizer.
- *
- * **The slash is restored before the correction, not after**, and that order is the whole
- * point of this function existing separately.
- *
- * `workerUrl.js` writes `new URL('./wasm/', import.meta.url)` with the slash, and Vite
- * rewrites that expression into an asset URL with the slash normalised away. Correcting
- * first therefore looked for `/.vite/deps/wasm/` in a string that read `/.vite/deps/wasm`,
- * missed, and left the optimizer's path in place — the slash was then appended to it,
- * producing a URL under `.vite/deps/` that has never existed. pdf.js asked for
- * `…/.vite/deps/wasm/jbig2.wasm`, got the dev server's index.html, and painted the stencil
- * mask black.
- *
- * @param {string} url
- * @param {string} name the directory, with its trailing slash
- */
-export function bundledDirectory(url, name) {
-  return correctOptimizedDepUrl(asDirectory(url), name)
-}
-
-/**
- * Guarantee the trailing slash pdf.js assumes.
- *
- * It builds every request as `${wasmUrl}${filename}` with no separator, so a directory URL
- * without a slash asks for `…/wasmjbig2.wasm` and 404s — which surfaces not as a missing
- * image but as a black rectangle, since a stencil mask that cannot be decoded is painted
- * in full.
- *
- * Written in `workerUrl.js` with the slash, and it still cannot be relied on: Vite rewrites
- * `new URL('./wasm/', import.meta.url)` into an asset URL and normalises the slash away.
- * A host passing its own directory is just as likely to leave it off. Cheaper to be certain
- * here than to depend on either.
- */
+/** Guarantee the trailing slash pdf.js assumes, which a host is likely to leave off. */
 function asDirectory(url) {
-  if (!url) return url
   return url.endsWith('/') ? url : `${url}/`
 }
 

@@ -251,6 +251,14 @@ export interface PDFViewerConfig {
    * it their metrics are substituted and the layout shifts.
    */
   standardFontDataUrl?: string
+  /**
+   * Where pdf.js fetches CMap data, as a directory URL.
+   *
+   * Unlike the others this is **not** shipped: CMaps are another 1.5 MB and only documents
+   * using predefined CJK encodings need them. Serve `pdfjs-dist/cmaps` yourself and set
+   * this if you open such documents.
+   */
+  cMapUrl?: string
 
   /**
    * How many documents to keep parsed in memory. Defaults to 3; `0` switches it off.

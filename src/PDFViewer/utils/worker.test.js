@@ -7,7 +7,6 @@ import {
   describeWorkerFailure,
   correctOptimizedDepUrl,
   resolveAssetUrls,
-  bundledDirectory,
 } from './worker.js'
 
 describe('configureWorker', () => {
@@ -108,12 +107,49 @@ describe('the bundled worker URL', () => {
     expect(code).not.toContain('pdfjs-dist')
   })
 
-  it('resolves the decoder and font directories the same way, with trailing slashes', async () => {
-    // Same mechanism, same constraint — and the slash is not cosmetic: pdf.js appends the
-    // filename directly to these.
+  it('names every asset file, never a directory', async () => {
+    /*
+     * The guard for a bug that shipped twice and only ever failed in production.
+     *
+     * A bundler emits a **file** it sees referenced here, copying it into the application's
+     * build output. A **directory** gives it nothing to emit, so nothing is copied and the
+     * URL points at a folder that was never created. `new URL('./wasm/', import.meta.url)`
+     * therefore worked in dev — where the dev server serves node_modules directly — and
+     * failed in every production build, where pdf.js asked for the wasm and the server
+     * answered with index.html.
+     */
     const code = await readWorkerUrlCode()
-    expect(code).toContain("new URL('./wasm/', import.meta.url)")
-    expect(code).toContain("new URL('./standard_fonts/', import.meta.url)")
+
+    for (const url of code.match(/new URL\('([^']+)'/g) ?? []) {
+      expect(url).not.toMatch(/\/'$/)
+    }
+
+    // The three decoders, by name. Fonts are asserted wholesale below.
+    expect(code).toContain("new URL('./wasm/jbig2.wasm', import.meta.url)")
+    expect(code).toContain("new URL('./wasm/openjpeg.wasm', import.meta.url)")
+    expect(code).toContain("new URL('./wasm/qcms_bg.wasm', import.meta.url)")
+  })
+
+  it('names every file pdfjs-dist actually ships, so none is silently dropped', async () => {
+    /*
+     * Reads the installed pdfjs-dist rather than a list copied into the test: an upgrade
+     * that adds a font or renames a decoder must fail here, not in a user's document.
+     */
+    const code = await readWorkerUrlCode()
+    const pdfjs = resolve(import.meta.dirname, '../../../node_modules/pdfjs-dist')
+
+    const shipped = [
+      ...(await readdir(resolve(pdfjs, 'wasm')))
+        .filter((f) => f.endsWith('.wasm') && f !== 'quickjs-eval.wasm')
+        .map((f) => `./wasm/${f}`),
+      ...(await readdir(resolve(pdfjs, 'standard_fonts')))
+        .filter((f) => !f.startsWith('LICENSE'))
+        .map((f) => `./standard_fonts/${f}`),
+    ]
+
+    for (const path of shipped) {
+      expect(code).toContain(`new URL('${path}', import.meta.url)`)
+    }
   })
 
   it('holds no logic of its own, being the one untested module', async () => {
@@ -124,11 +160,8 @@ describe('the bundled worker URL', () => {
      * there than here. Correcting these URLs belongs in worker.js, which is tested.
      */
     const code = await readWorkerUrlCode()
-    const lines = code.split('\n')
-    expect(lines.length).toBeGreaterThan(0)
-    for (const line of lines) {
-      expect(line).toMatch(/^export const \w+ = new URL\('\.\/[\w./-]+', import\.meta\.url\)\.href$/)
-    }
+    expect(code).not.toMatch(/\b(if|for|while|function|return|=>)\b/)
+    expect(code).not.toMatch(/[?]{1,2}|&&|\|\|/)
   })
 })
 
@@ -188,70 +221,17 @@ describe('correctOptimizedDepUrl', () => {
 })
 
 describe('resolveAssetUrls', () => {
-  it('ends both defaults in a slash, whatever the bundler did to them', () => {
-    /*
-     * Load-bearing, not tidiness: pdf.js builds the request as `${wasmUrl}${filename}`
-     * with no separator. This is how the original defect announced itself — with nothing
-     * configured at all, the concatenation produced the literal
-     * `nulljbig2_nowasm_fallback.js`.
-     *
-     * And the slash written in workerUrl.js does not survive: Vite rewrites
-     * `new URL('./wasm/', import.meta.url)` into an asset URL with the slash normalised
-     * away. This test caught exactly that, so it is a regression guard, not a formality.
-     */
-    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls()
-    expect(wasmUrl.endsWith('/')).toBe(true)
-    expect(standardFontDataUrl.endsWith('/')).toBe(true)
-  })
+  /*
+   * Only a host's own directories travel as URLs now. The package's own assets are
+   * resolved per file by utils/binaryData.js, because a bundler renames what it emits and
+   * pdf.js's own  cannot survive that.
+   */
+  it('passes nothing when the host configured nothing', () => {
+    expect(resolveAssetUrls()).toEqual({});
+    expect(resolveAssetUrls({})).toEqual({});
+  });
 
-  it('adds the slash a host left off', () => {
-    expect(resolveAssetUrls({ wasmUrl: 'https://cdn.example.com/wasm' }).wasmUrl).toBe(
-      'https://cdn.example.com/wasm/'
-    )
-  })
-
-  it('restores the slash before correcting the path, not after', () => {
-    /*
-     * The order is the bug, and it shipped. Reported from an app served under
-     * /service/dokumen-lain, where the logo stayed black on 0.1.6:
-     *
-     *   GET .../node_modules/.vite/deps/wasm/jbig2.wasm   304, 617 B of index.html
-     *
-     * `workerUrl.js` writes the slash; Vite rewrites the expression and normalises it
-     * away. Correcting first looked for `/.vite/deps/wasm/` in a string reading
-     * `/.vite/deps/wasm`, missed, and left the optimizer's path — then the slash was
-     * appended to *that*, naming a directory which has never existed.
-     *
-     * Written against the real URL rather than a tidy one, so it fails the way the
-     * browser did.
-     */
-    const fromOptimizer =
-      'http://localhost:5173/service/dokumen-lain/node_modules/.vite/deps/wasm'
-
-    expect(bundledDirectory(fromOptimizer, 'wasm/')).toBe(
-      'http://localhost:5173/service/dokumen-lain/node_modules/@armsolusi/pdf-viewer/dist/wasm/'
-    )
-
-    // And the shape that misled: correcting the un-slashed URL does nothing at all.
-    expect(correctOptimizedDepUrl(fromOptimizer, 'wasm/')).toBe(fromOptimizer)
-  })
-
-  it('handles the slashed form too, since which one arrives is the bundler’s choice', () => {
-    const slashed =
-      'http://localhost:5173/service/dokumen-lain/node_modules/.vite/deps/standard_fonts/'
-    expect(bundledDirectory(slashed, 'standard_fonts/')).toBe(
-      'http://localhost:5173/service/dokumen-lain/node_modules/@armsolusi/pdf-viewer/dist/standard_fonts/'
-    )
-  })
-
-  it('points at the directories the build actually fills', () => {
-    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls()
-    expect(wasmUrl).toMatch(/wasm\/$/)
-    expect(standardFontDataUrl).toMatch(/standard_fonts\/$/)
-  })
-
-  it('lets a host serving its own copies win', () => {
-    // Same precedence as config.workerSrc.
+  it('forwards what the host supplied', () => {
     expect(
       resolveAssetUrls({
         wasmUrl: 'https://cdn.example.com/pdfjs/wasm/',
@@ -260,15 +240,21 @@ describe('resolveAssetUrls', () => {
     ).toEqual({
       wasmUrl: 'https://cdn.example.com/pdfjs/wasm/',
       standardFontDataUrl: 'https://cdn.example.com/pdfjs/fonts/',
-    })
-  })
+    });
+  });
 
-  it('falls back per option, not all or nothing', () => {
-    const { wasmUrl, standardFontDataUrl } = resolveAssetUrls({ wasmUrl: '/my/wasm/' })
-    expect(wasmUrl).toBe('/my/wasm/')
-    expect(standardFontDataUrl).toMatch(/standard_fonts\/$/)
-  })
-})
+  it('adds the trailing slash a host left off', () => {
+    // pdf.js concatenates the filename straight on, and getFactoryUrlProp rejects a URL
+    // without a slash outright.
+    expect(resolveAssetUrls({ wasmUrl: 'https://cdn.example.com/wasm' })).toEqual({
+      wasmUrl: 'https://cdn.example.com/wasm/',
+    });
+  });
+
+  it('carries one option without inventing the other', () => {
+    expect(resolveAssetUrls({ wasmUrl: '/my/wasm/' })).toEqual({ wasmUrl: '/my/wasm/' });
+  });
+});
 
 describe('source hygiene', () => {
   it('never imports an asset with ?url, which Vite would inline', async () => {

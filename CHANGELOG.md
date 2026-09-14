@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+## 0.1.8
+
+### Fixed
+
+- **The decoders never reached a production build.** `0.1.6` and `0.1.7` shipped them and
+  worked in development, and in a built application a scanned logo still rendered as a
+  solid black rectangle: the wasm request came back as `index.html`.
+
+  The reason is a distinction I had wrong. A bundler emits a **file** it sees referenced by
+  `new URL('./thing', import.meta.url)`, copying it into the application's output. A
+  **directory** gives it nothing to emit, so `new URL('./wasm/', import.meta.url)` copied
+  nothing and pointed at a folder that was never created. Development hid it, because the
+  dev server serves `node_modules` directly.
+
+  Naming the directory more carefully would not have been enough either: emitted assets are
+  renamed with a content hash — the worker lands as `pdf.worker.min-DEtVeC4l.js` — so
+  pdf.js's own `${wasmUrl}${filename}` could never match `jbig2-CNFLgX9F.wasm`.
+
+  Every file is now referenced individually, so bundlers emit all of them, and a
+  `BinaryDataFactory` passed to `getDocument()` resolves each by name against whatever the
+  bundler produced. `config.wasmUrl` and `config.standardFontDataUrl` still win when a host
+  serves its own copies.
+
+  Verified in a real production build this time, not only in development: the three wasm
+  files and fourteen fonts appear in the output, and the URL in the bundle answers with
+  `application/wasm` through a server with an SPA fallback — the setup that previously
+  returned HTML.
+
+- **A clearer failure when an asset really is missing.** A 404 on a bundled file now says
+  which file, where it was sought, and that the bundler did not emit it. A request for a
+  CMap — which this package deliberately does not ship — says so and points at
+  `config.cMapUrl`, rather than pdf.js's bare "Unable to load CMap data".
+
 ## 0.1.7
 
 ### Fixed

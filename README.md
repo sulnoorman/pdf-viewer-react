@@ -107,9 +107,19 @@ rectangle on a page that is otherwise perfect.
 | `wasm/qcms_bg.wasm`, 87 kB | documents with ICC colour profiles |
 | `standard_fonts/`, 762 kB | documents using a standard font without embedding it |
 
-None of it enters your application bundle, and nothing is fetched by a document that does
-not need it. Override any of them with `config.workerSrc`, `config.wasmUrl` or
+None of it enters your application bundle, and nothing is *fetched* by a document that does
+not need it — though your build does copy all of it out, because a bundler decides what to
+emit long before it knows which documents your users will open. Expect about 2.5 MB of
+extra files in your build output, and no change to what the browser downloads to show your
+app.
+
+Override any of them with `config.workerSrc`, `config.wasmUrl` or
 `config.standardFontDataUrl` to serve your own copies.
+
+**CMaps are the one thing not shipped.** They are needed only by documents using predefined
+CJK encodings, and they are another 1.5 MB. Serve `pdfjs-dist/cmaps` yourself and pass
+`config.cMapUrl` if you open such documents; you will get a message saying exactly that if
+one turns up.
 
 ### The worker
 

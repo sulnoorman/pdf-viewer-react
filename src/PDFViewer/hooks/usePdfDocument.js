@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useCallback, useMemo, useRef } from 'react'
 import * as pdfjsLib from 'pdfjs-dist'
 import { configureWorker, describeWorkerFailure, resolveAssetUrls } from '../utils/worker.js'
+import { BundledBinaryDataFactory } from '../utils/binaryData.js'
 import { normalizeRotation } from '../utils/coords.js'
 import { normalizePdfSource, copyBytes, sourceKey } from '../utils/source.js'
 import { useLatestRef } from './useLatestRef.js'
@@ -166,6 +167,7 @@ export function usePdfDocument(
     workerPort,
     wasmUrl,
     standardFontDataUrl,
+    cMapUrl,
     cacheSize = DEFAULT_DOCUMENT_CACHE_SIZE,
     onLoadError,
   } = {}
@@ -289,12 +291,19 @@ export function usePdfDocument(
           data: copyBytes(sourceBytes),
           ...(workerRef.current ? { worker: workerRef.current } : {}),
           /*
-           * Where to fetch the image decoders and standard font data. Both have to be given
-           * per document — unlike the worker, pdf.js exposes no global for them, and has no
-           * default: an unset `wasmUrl` is concatenated with the filename as the string
-           * "null", which is how this surfaced as `Cannot find package 'nulljbig2…'`.
+           * How the image decoders and standard font data are found.
+           *
+           * The factory resolves each file by name against what the bundler emitted, which
+           * a base directory cannot do: assets are copied out under hashed names, so
+           * pdf.js's own `${wasmUrl}${filename}` would name a file that is not there. Only
+           * a host's own directories are passed as URLs, and then they win.
+           *
+           * Not optional. pdf.js has no default location for these, and an image whose
+           * decoder never starts is not skipped — a stencil mask is painted in full, so a
+           * scanned logo becomes a solid black rectangle on an otherwise perfect page.
            */
-          ...resolveAssetUrls({ wasmUrl, standardFontDataUrl }),
+          BinaryDataFactory: BundledBinaryDataFactory,
+          ...resolveAssetUrls({ wasmUrl, standardFontDataUrl, cMapUrl }),
         })
         doc = await loadingTask.promise
         if (cancelled) return
@@ -352,6 +361,7 @@ export function usePdfDocument(
     workerPort,
     wasmUrl,
     standardFontDataUrl,
+    cMapUrl,
     cacheSize,
     reloadToken,
     onLoadErrorRef,

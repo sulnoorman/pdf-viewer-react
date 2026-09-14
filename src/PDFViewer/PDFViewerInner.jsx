@@ -110,6 +110,8 @@ export function PDFViewerInner({ src, documentId, config = {}, viewerRef, viewer
      */
     wasmUrl,
     standardFontDataUrl,
+    /** CMaps are not shipped with the package; see the README. */
+    cMapUrl,
     /**
      * How many documents to keep parsed in memory, so returning to one a host has already
      * shown is instant rather than a fresh load. Only matters when one viewer cycles
@@ -157,6 +159,7 @@ export function PDFViewerInner({ src, documentId, config = {}, viewerRef, viewer
     workerPort,
     wasmUrl,
     standardFontDataUrl,
+    cMapUrl,
     cacheSize: documentCacheSize,
     onLoadError,
   })
